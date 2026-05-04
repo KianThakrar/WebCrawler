@@ -15,6 +15,7 @@ Complexity
 
 from __future__ import annotations
 
+import math
 import re
 
 # ---------------------------------------------------------------------------
@@ -116,6 +117,26 @@ class InvertedIndex:
     def document_count(self) -> int:
         """Total number of documents added to the index."""
         return self._doc_count
+
+    def compute_tfidf(self) -> None:
+        """Compute and store TF-IDF scores for every posting in the index.
+
+        Uses log-normalised TF and smoothed IDF::
+
+            tf(t, d)  = 1 + log(frequency)   if frequency > 0, else 0
+            idf(t)    = log((N + 1) / df(t))  smoothed to avoid zero division
+            tf_idf    = tf * idf
+
+        where N is the total number of indexed documents and df(t) is the
+        number of documents containing term t.
+        """
+        n_docs = self._doc_count or 1  # guard against empty index
+        for term, postings in self._index.items():
+            df = len(postings)
+            idf = math.log((n_docs + 1) / df)
+            for url, entry in postings.items():
+                tf = 1 + math.log(entry["frequency"]) if entry["frequency"] > 0 else 0.0
+                entry["tf_idf"] = tf * idf
 
 
 def build_index(pages: list) -> "InvertedIndex":
