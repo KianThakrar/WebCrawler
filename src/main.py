@@ -15,7 +15,7 @@ import os
 
 from src.crawler import crawl
 from src.indexer import InvertedIndex, build_index, load_index, save_index
-from src.search import SearchEngine
+from src.search import SearchEngine, suggest_terms
 
 _DEFAULT_INDEX_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "data", "index.json"
@@ -119,7 +119,16 @@ class Shell:
 
         results = self._engine.find(args)
         if not results:
-            return f"No pages found containing: {' '.join(args)}"
+            msg = f"No pages found containing: {' '.join(args)}"
+            suggestions = [
+                s for term in args
+                for s in suggest_terms(self._index, term)
+                if s != term.lower()
+            ]
+            if suggestions:
+                unique = list(dict.fromkeys(suggestions))[:3]
+                msg += f"\nDid you mean: {', '.join(unique)}?"
+            return msg
 
         lines = [f"Results for: {' AND '.join(args)}"]
         for rank, (url, score) in enumerate(results, start=1):

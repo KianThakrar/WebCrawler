@@ -227,3 +227,34 @@ class TestUnknownCommands:
     def test_exit_returns_quit_sentinel(self) -> None:
         shell = Shell()
         assert shell.run_command("exit") is None or shell.run_command("exit") == ""
+
+
+# ---------------------------------------------------------------------------
+# main() REPL loop
+# ---------------------------------------------------------------------------
+
+class TestMainRepl:
+    @patch("builtins.input", side_effect=["find wisdom", "quit"])
+    @patch("src.main.build_index")
+    @patch("src.main.crawl")
+    def test_main_runs_and_exits_on_quit(
+        self, _mock_crawl: MagicMock, _mock_build: MagicMock, _mock_input: MagicMock
+    ) -> None:
+        from src.main import main
+        # Should return cleanly without raising
+        main()
+
+    @patch("builtins.input", side_effect=EOFError)
+    def test_main_exits_on_eof(self, _mock_input: MagicMock) -> None:
+        from src.main import main
+        main()  # should not raise
+
+    @patch("builtins.input", side_effect=["exit"])
+    def test_main_exits_on_exit_command(self, _mock_input: MagicMock) -> None:
+        from src.main import main
+        main()
+
+    def test_print_progress_outputs_url(self, capsys) -> None:
+        Shell._print_progress("https://example.com/", 1, 0)
+        captured = capsys.readouterr()
+        assert "https://example.com/" in captured.out
