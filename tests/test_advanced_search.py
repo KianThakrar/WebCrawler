@@ -9,7 +9,7 @@ Covers:
 
 from __future__ import annotations
 
-from src.indexer import InvertedIndex, build_index
+from src.indexer import build_index
 from src.search import SearchEngine, suggest_terms
 
 # ---------------------------------------------------------------------------
@@ -192,3 +192,47 @@ class TestQuerySuggestions:
         lower = suggest_terms(idx, "goo")
         upper = suggest_terms(idx, "GOO")
         assert lower == upper
+
+    def test_suggest_empty_string_returns_empty(self) -> None:
+        idx = build_index([PAGE_A])
+        assert suggest_terms(idx, "") == []
+
+    def test_suggest_whitespace_returns_empty(self) -> None:
+        idx = build_index([PAGE_A])
+        assert suggest_terms(idx, "   ") == []
+
+
+# ---------------------------------------------------------------------------
+# Guard-branch coverage for find / find_phrase / find_with_proximity / find_bm25
+# ---------------------------------------------------------------------------
+
+class TestGuardBranches:
+    def test_find_second_term_missing_returns_empty(self) -> None:
+        engine = _build()
+        assert engine.find(["good", "xyznonexistent999"]) == []
+
+    def test_find_phrase_empty_string_returns_empty(self) -> None:
+        engine = _build()
+        assert engine.find_phrase("") == []
+
+    def test_find_phrase_all_stopwords_returns_empty(self) -> None:
+        engine = _build()
+        assert engine.find_phrase("the a an") == []
+
+    def test_has_consecutive_positions_empty_terms(self) -> None:
+        engine = _build()
+        assert engine._has_consecutive_positions("https://example.com/1/", []) is False
+
+    def test_proximity_missing_term_in_pair(self) -> None:
+        engine = _build()
+        # One term exists, one doesn't — min_distance should be inf, result empty
+        result = engine.find_with_proximity(["good", "xyznonexistent999"])
+        assert result == []
+
+    def test_find_bm25_empty_terms_returns_empty(self) -> None:
+        engine = _build()
+        assert engine.find_bm25([]) == []
+
+    def test_find_bm25_missing_term_returns_empty(self) -> None:
+        engine = _build()
+        assert engine.find_bm25(["xyznonexistent999"]) == []
