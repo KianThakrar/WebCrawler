@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import urljoin
+
 from bs4 import BeautifulSoup
 
 BASE_URL: str = "https://quotes.toscrape.com/"
@@ -61,12 +63,17 @@ def parse_quote_page(html: str, url: str) -> dict:
         quotes.append({"text": text, "author": author, "tags": tags})
         content_parts.extend([text, author] + tags)
 
+    next_url: str | None = None
+    next_li = soup.select_one("li.next > a")
+    if next_li and next_li.get("href"):
+        next_url = urljoin(url, next_li["href"])
+
     return {
         "url": url,
         "title": title,
         "quotes": quotes,
         "content": " ".join(content_parts),
-        "next_url": None,
+        "next_url": next_url,
     }
 
 
