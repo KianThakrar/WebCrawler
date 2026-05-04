@@ -107,6 +107,8 @@ class InvertedIndex:
         for postings in self._index.values():
             postings.pop(url, None)
 
+        # Count this URL only if it hasn't appeared in any posting yet.
+        # We check *after* the pop-loop so a re-indexed URL isn't double-counted.
         seen_urls_before = {
             u for postings in self._index.values() for u in postings
         }
@@ -154,7 +156,7 @@ class InvertedIndex:
                 entry["tf_idf"] = tf * idf
 
 
-def build_index(pages: list[dict]) -> InvertedIndex:
+def build_index(pages: list[dict[str, object]]) -> InvertedIndex:
     """Build an inverted index from a list of crawled page dicts.
 
     Args:

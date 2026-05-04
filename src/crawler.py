@@ -37,7 +37,7 @@ _REQUEST_TIMEOUT: int = 10
 _USER_AGENT: str = "WebCrawler/1.0 (COMP3011 coursework; educational use)"
 
 
-def parse_quote_page(html: str, url: str) -> dict:
+def parse_quote_page(html: str, url: str) -> dict[str, object]:
     """Parse one Quotes to Scrape HTML page into structured data.
 
     Args:
@@ -106,8 +106,8 @@ def crawl(
     """
     visited: set[str] = set()
     queue: deque[str] = deque([start_url])
-    pages: list[dict] = []
-    _headers = {"User-Agent": _USER_AGENT}
+    pages: list[dict[str, object]] = []
+    _headers: dict[str, str] = {"User-Agent": _USER_AGENT}
 
     while queue:
         if max_pages is not None and len(pages) >= max_pages:
@@ -118,6 +118,8 @@ def crawl(
             continue
         visited.add(url)
 
+        # Skip delay before the very first request; every subsequent
+        # fetch must wait to satisfy the 6 s politeness requirement.
         if pages:
             time.sleep(MIN_POLITENESS_DELAY_SECONDS)
 
