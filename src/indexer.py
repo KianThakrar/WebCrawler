@@ -127,6 +127,11 @@ class InvertedIndex:
         """Total number of documents added to the index."""
         return self._doc_count
 
+    def __repr__(self) -> str:
+        return (
+            f"InvertedIndex(terms={len(self)}, documents={self._doc_count})"
+        )
+
     def compute_tfidf(self) -> None:
         """Compute and store TF-IDF scores for every posting in the index.
 
