@@ -137,6 +137,31 @@ class TestLoadCommand:
         output = shell.run_command("load")
         assert "error" in output.lower() or "not found" in output.lower() or "no index" in output.lower()
 
+    @patch("src.main.load_index")
+    def test_load_corrupt_file_returns_error_message(self, mock_load: MagicMock) -> None:
+        mock_load.side_effect = ValueError("Index file is not valid JSON")
+        shell = Shell()
+        output = shell.run_command("load")
+        assert "error" in output.lower()
+
+
+# ---------------------------------------------------------------------------
+# help command
+# ---------------------------------------------------------------------------
+
+class TestHelpCommand:
+    def test_help_lists_build(self) -> None:
+        assert "build" in Shell().run_command("help")
+
+    def test_help_lists_find(self) -> None:
+        assert "find" in Shell().run_command("help")
+
+    def test_help_lists_phrase(self) -> None:
+        assert "phrase" in Shell().run_command("help")
+
+    def test_help_lists_bm25(self) -> None:
+        assert "bm25" in Shell().run_command("help")
+
 
 # ---------------------------------------------------------------------------
 # print command
