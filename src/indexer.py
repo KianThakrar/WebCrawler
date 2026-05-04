@@ -8,9 +8,17 @@ division-by-zero and reduce the dominance of very common terms.
 
 Complexity
 ----------
-- build_index:  O(P * T)   P = pages, T = tokens per page
-- compute_tfidf: O(V * D)  V = vocabulary size, D = documents per term
-- save/load:    O(V * D)   dominated by JSON serialisation
+- build_index:   O(P × T)   P = pages, T = tokens per page
+- compute_tfidf: O(V × D)   V = vocabulary size, D = documents per term
+- save / load:   O(V × D)   dominated by JSON serialisation
+
+Public API
+----------
+tokenise(text)                  → list[str]
+InvertedIndex                   class  (add_document, compute_tfidf, __len__, …)
+build_index(pages)              → InvertedIndex
+save_index(index, path)         → None
+load_index(path)                → InvertedIndex
 """
 
 from __future__ import annotations
