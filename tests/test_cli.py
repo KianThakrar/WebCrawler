@@ -285,6 +285,27 @@ class TestUnknownCommands:
 # main() REPL loop
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# stats command
+# ---------------------------------------------------------------------------
+
+class TestStatsCommand:
+    def test_stats_returns_term_count(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("stats")
+        assert "term" in output.lower()
+
+    def test_stats_returns_doc_count(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("stats")
+        assert "document" in output.lower() or "doc" in output.lower()
+
+    def test_stats_without_index_returns_error(self) -> None:
+        shell = Shell()
+        output = shell.run_command("stats")
+        assert any(w in output.lower() for w in ("build", "load", "index"))
+
+
 class TestMainRepl:
     @patch("builtins.input", side_effect=["find wisdom", "quit"])
     @patch("src.main.build_index")
