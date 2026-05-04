@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import time
+from collections import deque
+from typing import Callable
+
 from urllib.parse import urljoin
 
+import requests
 from bs4 import BeautifulSoup
 
 BASE_URL: str = "https://quotes.toscrape.com/"
@@ -77,6 +82,54 @@ def parse_quote_page(html: str, url: str) -> dict:
     }
 
 
-def crawl(start_url: str = BASE_URL, **kwargs) -> list:  # type: ignore[empty-body]
-    """Crawl the target site from *start_url*. (stub – not yet implemented)"""
-    raise NotImplementedError
+def crawl(
+    start_url: str = BASE_URL,
+    *,
+    on_progress: Callable[[str, int, int], None] | None = None,
+    max_pages: int | None = None,
+) -> list[dict]:
+    """Crawl quotes.toscrape.com starting from *start_url*.
+
+    Follows pagination links in BFS order.  Deduplicates visited URLs and
+    enforces MIN_POLITENESS_DELAY_SECONDS between requests.
+
+    Args:
+        start_url:   First URL to fetch.
+        on_progress: Optional callback ``(url, pages_done, estimated_total)``.
+        max_pages:   Stop after this many pages (useful for testing).
+
+    Returns:
+        List of page dicts as returned by :func:`parse_quote_page`.
+    """
+    visited: set[str] = set()
+    queue: deque[str] = deque([start_url])
+    pages: list[dict] = []
+
+    while queue:
+        if max_pages is not None and len(pages) >= max_pages:
+            break
+
+        url = queue.popleft()
+        if url in visited:
+            continue
+        visited.add(url)
+
+        if pages:
+            time.sleep(MIN_POLITENESS_DELAY_SECONDS)
+
+        try:
+            response = requests.get(url, timeout=_REQUEST_TIMEOUT)
+            response.raise_for_status()
+        except Exception:
+            continue
+
+        page_data = parse_quote_page(response.text, url)
+        pages.append(page_data)
+
+        if on_progress is not None:
+            on_progress(url, len(pages), len(pages))
+
+        if page_data["next_url"] and page_data["next_url"] not in visited:
+            queue.append(page_data["next_url"])
+
+    return pages
