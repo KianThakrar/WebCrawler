@@ -106,8 +106,8 @@ def crawl(
     """
     visited: set[str] = set()
     queue: deque[str] = deque([start_url])
-    pages: list[dict] = []
-    _headers = {"User-Agent": _USER_AGENT}
+    pages: list[dict[str, object]] = []
+    _headers: dict[str, str] = {"User-Agent": _USER_AGENT}
 
     while queue:
         if max_pages is not None and len(pages) >= max_pages:
