@@ -222,7 +222,7 @@ def main() -> None:
     """Run the interactive CLI shell."""
     shell = Shell()
     print("Search Engine – quotes.toscrape.com")
-    print("Commands: build | load | print <word> | find <word(s)> | quit\n")
+    print("Commands: build | load | print | find | phrase | bm25 | stats | help | quit\n")
 
     while True:
         try:
