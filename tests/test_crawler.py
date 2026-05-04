@@ -260,7 +260,10 @@ class TestCrawl:
     ) -> None:
         mock_get.return_value = _make_response(LAST_PAGE_HTML)
         crawl(BASE_URL)
-        mock_get.assert_called_with(BASE_URL, timeout=10)
+        call_kwargs = mock_get.call_args
+        assert call_kwargs.args[0] == BASE_URL
+        assert call_kwargs.kwargs.get("timeout") == 10
+        assert "User-Agent" in call_kwargs.kwargs.get("headers", {})
 
     @patch("src.crawler.time.sleep")
     @patch("src.crawler.requests.get")
