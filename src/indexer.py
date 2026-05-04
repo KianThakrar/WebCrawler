@@ -15,6 +15,7 @@ Complexity
 
 from __future__ import annotations
 
+import json
 import math
 import re
 
@@ -139,19 +140,57 @@ class InvertedIndex:
                 entry["tf_idf"] = tf * idf
 
 
-def build_index(pages: list) -> "InvertedIndex":
-    """Stub."""
-    raise NotImplementedError
+def build_index(pages: list[dict]) -> InvertedIndex:
+    """Build an inverted index from a list of crawled page dicts.
+
+    Args:
+        pages: List of page dicts as returned by the crawler.
+
+    Returns:
+        Fully populated :class:`InvertedIndex` with TF-IDF scores computed.
+    """
+    idx = InvertedIndex()
+    for page in pages:
+        idx.add_document(page["url"], page.get("content", ""))
+    idx.compute_tfidf()
+    return idx
 
 
-def save_index(index: "InvertedIndex", path: str) -> None:
-    """Stub."""
-    raise NotImplementedError
+def save_index(index: InvertedIndex, path: str) -> None:
+    """Serialise *index* to a JSON file at *path*.
+
+    Args:
+        index: Populated :class:`InvertedIndex` to persist.
+        path:  Filesystem path for the output JSON file.
+    """
+    payload = {
+        "document_count": index.document_count,
+        "index": index._index,
+    }
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2, ensure_ascii=False)
 
 
-def load_index(path: str) -> "InvertedIndex":
-    """Stub."""
-    raise NotImplementedError
+def load_index(path: str) -> InvertedIndex:
+    """Deserialise an :class:`InvertedIndex` from a JSON file at *path*.
+
+    Args:
+        path: Filesystem path to a JSON file previously written by
+              :func:`save_index`.
+
+    Raises:
+        FileNotFoundError: If *path* does not exist.
+
+    Returns:
+        Restored :class:`InvertedIndex`.
+    """
+    with open(path, encoding="utf-8") as fh:
+        payload = json.load(fh)
+
+    idx = InvertedIndex()
+    idx._index = payload["index"]
+    idx._doc_count = payload["document_count"]
+    return idx
 
 
 def tokenise(text: str) -> list[str]:
