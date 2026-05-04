@@ -22,6 +22,8 @@ Complexity
 
 from __future__ import annotations
 
+__all__ = ["SearchEngine", "suggest_terms"]
+
 import bisect
 import math
 

@@ -23,6 +23,8 @@ load_index(path)                → InvertedIndex
 
 from __future__ import annotations
 
+__all__ = ["tokenise", "InvertedIndex", "build_index", "save_index", "load_index"]
+
 import json
 import math
 import re
