@@ -47,8 +47,8 @@ coverage.xml
 .AppleDouble
 .LSOverride
 
-# Data (keep directory, ignore large index files from accidental commit)
-data/*.json
+# Data — keep the directory; the compiled index.json is a submission artefact
 data/*.pkl
 data/*.db
 !data/.gitkeep
+!data/index.json
