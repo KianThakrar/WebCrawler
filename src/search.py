@@ -232,6 +232,8 @@ class SearchEngine:
         for postings in self._index._index.values():
             for url, entry in postings.items():
                 doc_lengths[url] = doc_lengths.get(url, 0) + entry["frequency"]
+        # Guard: fall back to 1 so division never raises ZeroDivisionError
+        # on an empty corpus (shouldn't happen in practice but keeps BM25 safe).
         avg_dl = sum(doc_lengths.values()) / len(doc_lengths) if doc_lengths else 1.0
 
         # Intersect candidate set (AND semantics)
