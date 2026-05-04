@@ -27,6 +27,7 @@ __all__ = ["tokenise", "InvertedIndex", "build_index", "save_index", "load_index
 
 import json
 import math
+import os
 import re
 
 # ---------------------------------------------------------------------------
@@ -180,6 +181,7 @@ def save_index(index: InvertedIndex, path: str) -> None:
         "document_count": index.document_count,
         "index": index._index,
     }
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2, ensure_ascii=False)
 
@@ -198,11 +200,17 @@ def load_index(path: str) -> InvertedIndex:
         Restored :class:`InvertedIndex`.
     """
     with open(path, encoding="utf-8") as fh:
-        payload = json.load(fh)
+        try:
+            payload = json.load(fh)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Index file '{path}' is not valid JSON: {exc}") from exc
 
-    idx = InvertedIndex()
-    idx._index = payload["index"]
-    idx._doc_count = payload["document_count"]
+    try:
+        idx = InvertedIndex()
+        idx._index = payload["index"]
+        idx._doc_count = payload["document_count"]
+    except KeyError as exc:
+        raise ValueError(f"Index file '{path}' is missing required key: {exc}") from exc
     return idx
 
 
@@ -215,7 +223,7 @@ def tokenise(text: str) -> list[str]:
     Returns:
         Ordered list of meaningful tokens.
     """
-    lowered = text.lower()
+    lowered = str(text).lower()
     stripped = _PUNCT_RE.sub(" ", lowered)
     tokens = stripped.split()
     return [t for t in tokens if t and t not in _STOPWORDS]

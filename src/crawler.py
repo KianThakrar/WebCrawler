@@ -34,6 +34,7 @@ def clean_text(value: str) -> str:
 
 MIN_POLITENESS_DELAY_SECONDS: float = 6.0
 _REQUEST_TIMEOUT: int = 10
+_USER_AGENT: str = "WebCrawler/1.0 (COMP3011 coursework; educational use)"
 
 
 def parse_quote_page(html: str, url: str) -> dict:
@@ -106,6 +107,7 @@ def crawl(
     visited: set[str] = set()
     queue: deque[str] = deque([start_url])
     pages: list[dict] = []
+    _headers = {"User-Agent": _USER_AGENT}
 
     while queue:
         if max_pages is not None and len(pages) >= max_pages:
@@ -120,7 +122,7 @@ def crawl(
             time.sleep(MIN_POLITENESS_DELAY_SECONDS)
 
         try:
-            response = requests.get(url, timeout=_REQUEST_TIMEOUT)
+            response = requests.get(url, timeout=_REQUEST_TIMEOUT, headers=_headers)
             response.raise_for_status()
         except Exception:
             continue

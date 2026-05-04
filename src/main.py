@@ -107,6 +107,8 @@ class Shell:
                 f"Error: index file not found at '{self._index_path}'. "
                 "Run 'build' first."
             )
+        except ValueError as exc:
+            return f"Error: could not load index – {exc}"
 
     def _cmd_print(self, args: list[str]) -> str:
         if not args:
