@@ -107,6 +107,8 @@ class InvertedIndex:
         for postings in self._index.values():
             postings.pop(url, None)
 
+        # Count this URL only if it hasn't appeared in any posting yet.
+        # We check *after* the pop-loop so a re-indexed URL isn't double-counted.
         seen_urls_before = {
             u for postings in self._index.values() for u in postings
         }
