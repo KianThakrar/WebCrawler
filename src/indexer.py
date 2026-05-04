@@ -217,7 +217,7 @@ def tokenise(text: str) -> list[str]:
     Returns:
         Ordered list of meaningful tokens.
     """
-    lowered = text.lower()
+    lowered = str(text).lower()
     stripped = _PUNCT_RE.sub(" ", lowered)
     tokens = stripped.split()
     return [t for t in tokens if t and t not in _STOPWORDS]
