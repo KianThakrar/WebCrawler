@@ -118,6 +118,8 @@ def crawl(
             continue
         visited.add(url)
 
+        # Skip delay before the very first request; every subsequent
+        # fetch must wait to satisfy the 6 s politeness requirement.
         if pages:
             time.sleep(MIN_POLITENESS_DELAY_SECONDS)
 
