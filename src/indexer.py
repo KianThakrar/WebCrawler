@@ -36,24 +36,86 @@ _PUNCT_RE = re.compile(r"[^\w\s]")
 
 
 # ---------------------------------------------------------------------------
-# Stubs (implemented in subsequent commits)
+# Inverted index
 # ---------------------------------------------------------------------------
 
 class InvertedIndex:
-    """Stub – implemented in a later commit."""
+    """Maps terms to per-document posting lists.
+
+    Structure::
+
+        {
+          "word": {
+            "https://page.url/": {
+              "frequency": int,
+              "positions": [int, ...],
+              "tf_idf":    float        # populated by compute_tfidf()
+            }
+          }
+        }
+    """
+
+    def __init__(self) -> None:
+        self._index: dict[str, dict[str, dict]] = {}
+        self._doc_count: int = 0
+
+    # ------------------------------------------------------------------
+    # Mapping protocol
+    # ------------------------------------------------------------------
+
     def __len__(self) -> int:
-        raise NotImplementedError
+        """Return the number of unique terms in the index."""
+        return len(self._index)
+
     def __getitem__(self, term: str) -> dict:
-        raise NotImplementedError
+        """Return the posting dict for *term*; raises KeyError if absent."""
+        return self._index[term]
+
+    def __contains__(self, term: object) -> bool:
+        return term in self._index
+
+    # ------------------------------------------------------------------
+    # Mutation
+    # ------------------------------------------------------------------
+
     def add_document(self, url: str, content: str) -> None:
-        raise NotImplementedError
-    def compute_tfidf(self) -> None:
-        raise NotImplementedError
+        """Tokenise *content* and add all postings for *url*.
+
+        Calling this method twice with the same *url* overwrites the
+        previous entry for that document.
+
+        Args:
+            url:     Canonical URL used as the document identifier.
+            content: Plain-text content of the page.
+        """
+        tokens = tokenise(content)
+
+        # Remove any existing postings for this URL so re-indexing is clean
+        for postings in self._index.values():
+            postings.pop(url, None)
+
+        seen_urls_before = {
+            u for postings in self._index.values() for u in postings
+        }
+        if url not in seen_urls_before:
+            self._doc_count += 1
+
+        for position, token in enumerate(tokens):
+            if token not in self._index:
+                self._index[token] = {}
+            if url not in self._index[token]:
+                self._index[token][url] = {"frequency": 0, "positions": [], "tf_idf": 0.0}
+            self._index[token][url]["frequency"] += 1
+            self._index[token][url]["positions"].append(position)
+
+    # ------------------------------------------------------------------
+    # Properties
+    # ------------------------------------------------------------------
+
     @property
     def document_count(self) -> int:
-        raise NotImplementedError
-    def __contains__(self, term: str) -> bool:
-        raise NotImplementedError
+        """Total number of documents added to the index."""
+        return self._doc_count
 
 
 def build_index(pages: list) -> "InvertedIndex":
