@@ -8,12 +8,22 @@ division-by-zero and reduce the dominance of very common terms.
 
 Complexity
 ----------
-- build_index:  O(P * T)   P = pages, T = tokens per page
-- compute_tfidf: O(V * D)  V = vocabulary size, D = documents per term
-- save/load:    O(V * D)   dominated by JSON serialisation
+- build_index:   O(P × T)   P = pages, T = tokens per page
+- compute_tfidf: O(V × D)   V = vocabulary size, D = documents per term
+- save / load:   O(V × D)   dominated by JSON serialisation
+
+Public API
+----------
+tokenise(text)                  → list[str]
+InvertedIndex                   class  (add_document, compute_tfidf, __len__, …)
+build_index(pages)              → InvertedIndex
+save_index(index, path)         → None
+load_index(path)                → InvertedIndex
 """
 
 from __future__ import annotations
+
+__all__ = ["tokenise", "InvertedIndex", "build_index", "save_index", "load_index"]
 
 import json
 import math
@@ -118,6 +128,9 @@ class InvertedIndex:
     def document_count(self) -> int:
         """Total number of documents added to the index."""
         return self._doc_count
+
+    def __repr__(self) -> str:
+        return f"InvertedIndex(terms={len(self)}, documents={self._doc_count})"
 
     def compute_tfidf(self) -> None:
         """Compute and store TF-IDF scores for every posting in the index.

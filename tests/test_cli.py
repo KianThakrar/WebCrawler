@@ -63,7 +63,7 @@ class TestBuildCommand:
     @patch("src.main.build_index")
     @patch("src.main.crawl")
     def test_build_calls_crawl(
-        self, mock_crawl: MagicMock, mock_build: MagicMock, mock_save: MagicMock
+        self, mock_crawl: MagicMock, mock_build: MagicMock, _mock_save: MagicMock
     ) -> None:
         mock_crawl.return_value = [PAGE_A]
         mock_build.return_value = InvertedIndex()
@@ -75,7 +75,7 @@ class TestBuildCommand:
     @patch("src.main.build_index")
     @patch("src.main.crawl")
     def test_build_calls_build_index(
-        self, mock_crawl: MagicMock, mock_build: MagicMock, mock_save: MagicMock
+        self, mock_crawl: MagicMock, mock_build: MagicMock, _mock_save: MagicMock
     ) -> None:
         mock_crawl.return_value = [PAGE_A]
         mock_build.return_value = InvertedIndex()
@@ -87,7 +87,7 @@ class TestBuildCommand:
     @patch("src.main.build_index")
     @patch("src.main.crawl")
     def test_build_sets_engine(
-        self, mock_crawl: MagicMock, mock_build: MagicMock, mock_save: MagicMock
+        self, mock_crawl: MagicMock, mock_build: MagicMock, _mock_save: MagicMock
     ) -> None:
         mock_crawl.return_value = [PAGE_A]
         mock_build.return_value = build_index([PAGE_A])
@@ -99,7 +99,7 @@ class TestBuildCommand:
     @patch("src.main.build_index")
     @patch("src.main.crawl")
     def test_build_output_mentions_pages(
-        self, mock_crawl: MagicMock, mock_build: MagicMock, mock_save: MagicMock
+        self, mock_crawl: MagicMock, mock_build: MagicMock, _mock_save: MagicMock
     ) -> None:
         mock_crawl.return_value = [PAGE_A]
         mock_build.return_value = InvertedIndex()
@@ -209,6 +209,58 @@ class TestFindCommand:
 # Unknown / empty commands
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# phrase command (advanced)
+# ---------------------------------------------------------------------------
+
+class TestPhraseCommand:
+    def test_phrase_known_words_returns_output(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("phrase wisdom courage")
+        assert isinstance(output, str)
+
+    def test_phrase_without_index_returns_error(self) -> None:
+        shell = Shell()
+        output = shell.run_command("phrase wisdom")
+        assert any(w in output.lower() for w in ("build", "load", "index"))
+
+    def test_phrase_no_argument_returns_usage(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("phrase")
+        assert "usage" in output.lower() or "word" in output.lower()
+
+    def test_phrase_not_found_returns_message(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("phrase xyznonexistent")
+        assert "no" in output.lower() or "not found" in output.lower()
+
+
+# ---------------------------------------------------------------------------
+# bm25 command (advanced)
+# ---------------------------------------------------------------------------
+
+class TestBm25Command:
+    def test_bm25_known_word_returns_results(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("bm25 wisdom")
+        assert "example.com" in output
+
+    def test_bm25_without_index_returns_error(self) -> None:
+        shell = Shell()
+        output = shell.run_command("bm25 wisdom")
+        assert any(w in output.lower() for w in ("build", "load", "index"))
+
+    def test_bm25_no_argument_returns_usage(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("bm25")
+        assert "usage" in output.lower() or "word" in output.lower()
+
+    def test_bm25_not_found_returns_message(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("bm25 xyznonexistent")
+        assert "no" in output.lower() or "not found" in output.lower()
+
+
 class TestUnknownCommands:
     def test_unknown_command_returns_error(self) -> None:
         shell = Shell()
@@ -232,6 +284,27 @@ class TestUnknownCommands:
 # ---------------------------------------------------------------------------
 # main() REPL loop
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# stats command
+# ---------------------------------------------------------------------------
+
+class TestStatsCommand:
+    def test_stats_returns_term_count(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("stats")
+        assert "term" in output.lower()
+
+    def test_stats_returns_doc_count(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("stats")
+        assert "document" in output.lower() or "doc" in output.lower()
+
+    def test_stats_without_index_returns_error(self) -> None:
+        shell = Shell()
+        output = shell.run_command("stats")
+        assert any(w in output.lower() for w in ("build", "load", "index"))
+
 
 class TestMainRepl:
     @patch("builtins.input", side_effect=["find wisdom", "quit"])

@@ -61,6 +61,10 @@ class Shell:
             "load": self._cmd_load,
             "print": self._cmd_print,
             "find": self._cmd_find,
+            "phrase": self._cmd_phrase,
+            "bm25": self._cmd_bm25,
+            "stats": self._cmd_stats,
+            "help": self._cmd_help,
             "quit": self._cmd_quit,
             "exit": self._cmd_quit,
         }
@@ -135,6 +139,69 @@ class Shell:
             lines.append(f"  {rank}. {url}  (score: {score:.4f})")
         return "\n".join(lines)
 
+    def _cmd_phrase(self, args: list[str]) -> str:
+        if not args:
+            return "Usage: phrase <word> [word ...]"
+        if self._engine is None:
+            return "No index loaded. Run 'build' or 'load' first."
+
+        results = self._engine.find_phrase(" ".join(args))
+        if not results:
+            return f"No pages found containing exact phrase: {' '.join(args)}"
+
+        lines = [f"Phrase results for: \"{' '.join(args)}\""]
+        for rank, (url, score) in enumerate(results, start=1):
+            lines.append(f"  {rank}. {url}  (score: {score:.4f})")
+        return "\n".join(lines)
+
+    def _cmd_bm25(self, args: list[str]) -> str:
+        if not args:
+            return "Usage: bm25 <word> [word ...]"
+        if self._engine is None:
+            return "No index loaded. Run 'build' or 'load' first."
+
+        results = self._engine.find_bm25(args)
+        if not results:
+            return f"No pages found (BM25) for: {' '.join(args)}"
+
+        lines = [f"BM25 results for: {' AND '.join(args)}"]
+        for rank, (url, score) in enumerate(results, start=1):
+            lines.append(f"  {rank}. {url}  (score: {score:.4f})")
+        return "\n".join(lines)
+
+    def _cmd_stats(self, _args: list[str]) -> str:
+        if self._index is None:
+            return "No index loaded. Run 'build' or 'load' first."
+
+        n_terms = len(self._index)
+        n_docs = self._index.document_count
+
+        # Top-10 terms by document frequency (most widespread)
+        postings = self._index._index
+        by_df = sorted(postings.items(), key=lambda x: len(x[1]), reverse=True)
+        top_terms = [f"{term} ({len(docs)} docs)" for term, docs in by_df[:10]]
+
+        lines = [
+            "Index statistics:",
+            f"  Unique terms    : {n_terms}",
+            f"  Documents       : {n_docs}",
+            f"  Top terms by df : {', '.join(top_terms)}",
+        ]
+        return "\n".join(lines)
+
+    def _cmd_help(self, _args: list[str]) -> str:
+        return (
+            "Available commands:\n"
+            "  build               – crawl site and build index\n"
+            "  load                – load saved index from disk\n"
+            "  print <word>        – show posting list for a word\n"
+            "  find  <word(s)>     – AND search, TF-IDF ranked\n"
+            "  phrase <word(s)>    – exact phrase search\n"
+            "  bm25  <word(s)>     – AND search, BM25 ranked\n"
+            "  stats               – show index statistics\n"
+            "  quit / exit         – exit the shell"
+        )
+
     def _cmd_quit(self, _args: list[str]) -> str:
         return ""
 
@@ -155,7 +222,7 @@ def main() -> None:
     """Run the interactive CLI shell."""
     shell = Shell()
     print("Search Engine – quotes.toscrape.com")
-    print("Commands: build | load | print <word> | find <word(s)> | quit\n")
+    print("Commands: build | load | print | find | phrase | bm25 | stats | help | quit\n")
 
     while True:
         try:

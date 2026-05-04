@@ -22,6 +22,9 @@ Complexity
 
 from __future__ import annotations
 
+__all__ = ["SearchEngine", "suggest_terms"]
+
+import bisect
 import math
 
 from src.indexer import InvertedIndex, tokenise
@@ -118,9 +121,13 @@ class SearchEngine:
     def _has_consecutive_positions(self, url: str, terms: list[str]) -> bool:
         """Return True if *terms* appear in consecutive positions in *url*.
 
-        For each starting position of terms[0] in the document, check
-        whether terms[1] appears at position+1, terms[2] at position+2, etc.
-        Time complexity: O(k * P) where k = len(terms), P = positions of first term.
+        For each starting position of terms[0] in the document, uses
+        ``bisect.bisect_left`` (binary search) to check whether each
+        subsequent term appears at the required offset — O(log P) per
+        lookup rather than O(P) linear scan.
+
+        Time complexity: O(P * k * log P) vs O(P * k) naïve — bisect
+        pays off when position lists are long (dense documents).
         """
         if not terms:
             return False
@@ -129,7 +136,9 @@ class SearchEngine:
             if all(
                 terms[i] in self._index
                 and url in self._index[terms[i]]
-                and (start + i) in self._index[terms[i]][url]["positions"]
+                and _position_exists(
+                    self._index[terms[i]][url]["positions"], start + i
+                )
                 for i in range(1, len(terms))
             ):
                 return True
@@ -278,28 +287,42 @@ class SearchEngine:
 # Module-level helpers
 # ---------------------------------------------------------------------------
 
-def _levenshtein(a: str, b: str) -> int:
+def _position_exists(positions: list[int], target: int) -> bool:
+    """Return True if *target* is in the sorted *positions* list.
+
+    Uses ``bisect.bisect_left`` for O(log P) binary search rather than
+    O(P) linear scan — beneficial for long position lists.
+    """
+    idx = bisect.bisect_left(positions, target)
+    return idx < len(positions) and positions[idx] == target
+
+
+def _levenshtein(a: str, b: str, max_dist: int | None = None) -> int:
     """Compute the Levenshtein edit distance between strings *a* and *b*.
 
-    Uses a full dynamic-programming matrix.
-    Time complexity:  O(|a| * |b|)
-    Space complexity: O(|a| * |b|)
+    Uses a row-at-a-time DP with early exit: if the minimum value in the
+    current row already exceeds *max_dist*, the strings are guaranteed to
+    be further apart than the threshold and ``max_dist + 1`` is returned
+    immediately — avoiding unnecessary computation.
+
+    Time complexity:  O(|a| * |b|) worst case; faster with small *max_dist*
+    Space complexity: O(min(|a|, |b|))  — two rows, not full matrix
     """
     m, n = len(a), len(b)
-    dp = [[0] * (n + 1) for _ in range(m + 1)]
-    for i in range(m + 1):
-        dp[i][0] = i
-    for j in range(n + 1):
-        dp[0][j] = j
+    # Keep the shorter string in the inner loop for cache efficiency
+    if m < n:
+        a, b, m, n = b, a, n, m
+
+    prev = list(range(n + 1))
     for i in range(1, m + 1):
+        curr = [i] + [0] * n
         for j in range(1, n + 1):
             cost = 0 if a[i - 1] == b[j - 1] else 1
-            dp[i][j] = min(
-                dp[i - 1][j] + 1,       # deletion
-                dp[i][j - 1] + 1,       # insertion
-                dp[i - 1][j - 1] + cost, # substitution
-            )
-    return dp[m][n]
+            curr[j] = min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+        if max_dist is not None and min(curr) > max_dist:
+            return max_dist + 1
+        prev = curr
+    return prev[n]
 
 
 def suggest_terms(
@@ -331,7 +354,7 @@ def suggest_terms(
     # Tokenise to apply the same normalisation as during indexing
     candidates: list[tuple[int, str]] = []
     for term in index._index:
-        dist = _levenshtein(query, term)
+        dist = _levenshtein(query, term, max_dist=max_distance)
         if 0 < dist <= max_distance:
             candidates.append((dist, term))
 
