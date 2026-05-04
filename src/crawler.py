@@ -37,7 +37,7 @@ _REQUEST_TIMEOUT: int = 10
 _USER_AGENT: str = "WebCrawler/1.0 (COMP3011 coursework; educational use)"
 
 
-def parse_quote_page(html: str, url: str) -> dict:
+def parse_quote_page(html: str, url: str) -> dict[str, object]:
     """Parse one Quotes to Scrape HTML page into structured data.
 
     Args:
