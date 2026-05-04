@@ -200,11 +200,17 @@ def load_index(path: str) -> InvertedIndex:
         Restored :class:`InvertedIndex`.
     """
     with open(path, encoding="utf-8") as fh:
-        payload = json.load(fh)
+        try:
+            payload = json.load(fh)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Index file '{path}' is not valid JSON: {exc}") from exc
 
-    idx = InvertedIndex()
-    idx._index = payload["index"]
-    idx._doc_count = payload["document_count"]
+    try:
+        idx = InvertedIndex()
+        idx._index = payload["index"]
+        idx._doc_count = payload["document_count"]
+    except KeyError as exc:
+        raise ValueError(f"Index file '{path}' is missing required key: {exc}") from exc
     return idx
 
 
