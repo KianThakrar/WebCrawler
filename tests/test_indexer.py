@@ -306,3 +306,32 @@ class TestSerialization:
             assert False, "Should have raised"
         except FileNotFoundError:
             pass
+
+    def test_load_corrupt_json_raises_value_error(self) -> None:
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write("{ not valid json }")
+            path = f.name
+        try:
+            load_index(path)
+            assert False, "Should have raised"
+        except ValueError:
+            pass
+
+    def test_load_missing_keys_raises_value_error(self) -> None:
+        import tempfile, json
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"wrong_key": {}}, f)
+            path = f.name
+        try:
+            load_index(path)
+            assert False, "Should have raised"
+        except ValueError:
+            pass
+
+    def test_save_creates_nested_directory(self) -> None:
+        idx = build_index([PAGE_A])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "nested", "deep", "index.json")
+            save_index(idx, path)
+            assert os.path.exists(path)
