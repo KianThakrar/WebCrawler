@@ -64,6 +64,7 @@ class Shell:
             "phrase": self._cmd_phrase,
             "bm25": self._cmd_bm25,
             "stats": self._cmd_stats,
+            "help": self._cmd_help,
             "quit": self._cmd_quit,
             "exit": self._cmd_quit,
         }
@@ -187,6 +188,19 @@ class Shell:
             f"  Top terms by df : {', '.join(top_terms)}",
         ]
         return "\n".join(lines)
+
+    def _cmd_help(self, _args: list[str]) -> str:
+        return (
+            "Available commands:\n"
+            "  build               – crawl site and build index\n"
+            "  load                – load saved index from disk\n"
+            "  print <word>        – show posting list for a word\n"
+            "  find  <word(s)>     – AND search, TF-IDF ranked\n"
+            "  phrase <word(s)>    – exact phrase search\n"
+            "  bm25  <word(s)>     – AND search, BM25 ranked\n"
+            "  stats               – show index statistics\n"
+            "  quit / exit         – exit the shell"
+        )
 
     def _cmd_quit(self, _args: list[str]) -> str:
         return ""
