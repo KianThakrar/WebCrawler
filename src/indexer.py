@@ -154,7 +154,7 @@ class InvertedIndex:
                 entry["tf_idf"] = tf * idf
 
 
-def build_index(pages: list[dict]) -> InvertedIndex:
+def build_index(pages: list[dict[str, object]]) -> InvertedIndex:
     """Build an inverted index from a list of crawled page dicts.
 
     Args:

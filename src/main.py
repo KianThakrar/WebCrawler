@@ -32,6 +32,13 @@ class Shell:
     """
 
     def __init__(self, index_path: str = _DEFAULT_INDEX_PATH) -> None:
+        """Initialise the shell with an optional custom index file path.
+
+        Args:
+            index_path: Path used for ``save_index`` / ``load_index``.
+                        Defaults to ``data/index.json`` relative to the
+                        repository root.
+        """
         self._index: InvertedIndex | None = None
         self._engine: SearchEngine | None = None
         self._index_path: str = index_path
