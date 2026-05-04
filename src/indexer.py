@@ -27,6 +27,7 @@ __all__ = ["tokenise", "InvertedIndex", "build_index", "save_index", "load_index
 
 import json
 import math
+import os
 import re
 
 # ---------------------------------------------------------------------------
@@ -180,6 +181,7 @@ def save_index(index: InvertedIndex, path: str) -> None:
         "document_count": index.document_count,
         "index": index._index,
     }
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2, ensure_ascii=False)
 
