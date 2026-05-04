@@ -44,6 +44,9 @@ junit*.xml
 *.swo
 *~
 
+# Personal notes
+VIDEO_SCRIPT.md
+
 # macOS
 .DS_Store
 .AppleDouble
