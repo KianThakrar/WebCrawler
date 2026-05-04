@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from bs4 import BeautifulSoup
+
 BASE_URL: str = "https://quotes.toscrape.com/"
 
 # ---------------------------------------------------------------------------
@@ -25,9 +27,47 @@ MIN_POLITENESS_DELAY_SECONDS: float = 6.0
 _REQUEST_TIMEOUT: int = 10
 
 
-def parse_quote_page(html: str, url: str) -> dict:  # type: ignore[empty-body]
-    """Parse one page of quotes.toscrape.com. (stub – not yet implemented)"""
-    raise NotImplementedError
+def parse_quote_page(html: str, url: str) -> dict:
+    """Parse one Quotes to Scrape HTML page into structured data.
+
+    Args:
+        html: Raw HTML source of the page.
+        url:  Absolute URL of the page (used to resolve relative links).
+
+    Returns:
+        A dict with keys: url, title, quotes, content, next_url.
+    """
+    soup = BeautifulSoup(html or "", "html.parser")
+
+    title = clean_text(soup.title.get_text(" ", strip=True)) if soup.title else ""
+
+    quotes: list[dict] = []
+    content_parts: list[str] = []
+
+    for quote_el in soup.select("div.quote"):
+        text_el = quote_el.select_one(".text")
+        author_el = quote_el.select_one(".author")
+        if text_el is None:
+            continue
+
+        text = clean_text(text_el.get_text(" ", strip=True))
+        author = clean_text(author_el.get_text(" ", strip=True)) if author_el else ""
+        tags = [
+            clean_text(tag.get_text(" ", strip=True))
+            for tag in quote_el.select("a.tag")
+        ]
+        tags = [t for t in tags if t]
+
+        quotes.append({"text": text, "author": author, "tags": tags})
+        content_parts.extend([text, author] + tags)
+
+    return {
+        "url": url,
+        "title": title,
+        "quotes": quotes,
+        "content": " ".join(content_parts),
+        "next_url": None,
+    }
 
 
 def crawl(start_url: str = BASE_URL, **kwargs) -> list:  # type: ignore[empty-body]
