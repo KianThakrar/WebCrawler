@@ -149,6 +149,15 @@ class TestInvertedIndexStructure:
         idx.add_document("https://a.com/", "hello hello")
         assert idx["hello"]["https://a.com/"]["frequency"] == 2
 
+    def test_re_indexing_same_url_does_not_double_count_documents(self) -> None:
+        idx = InvertedIndex()
+        idx.add_document("https://a.com/", "hello world")
+        assert idx.document_count == 1
+        idx.add_document("https://a.com/", "hello there")
+        assert idx.document_count == 1
+        idx.add_document("https://b.com/", "another page")
+        assert idx.document_count == 2
+
 
 # ---------------------------------------------------------------------------
 # TF-IDF scoring

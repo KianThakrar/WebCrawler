@@ -95,7 +95,8 @@ class InvertedIndex:
         """Tokenise *content* and add all postings for *url*.
 
         Calling this method twice with the same *url* overwrites the
-        previous entry for that document.
+        previous entry for that document and leaves ``document_count``
+        unchanged.
 
         Args:
             url:     Canonical URL used as the document identifier.
@@ -103,16 +104,18 @@ class InvertedIndex:
         """
         tokens = tokenise(content)
 
+        # Decide whether this is a brand-new document BEFORE we wipe its
+        # postings — otherwise the lookup below sees an empty trail and
+        # always thinks the URL is new, double-counting on re-index.
+        is_new_document = not any(
+            url in postings for postings in self._index.values()
+        )
+
         # Remove any existing postings for this URL so re-indexing is clean
         for postings in self._index.values():
             postings.pop(url, None)
 
-        # Count this URL only if it hasn't appeared in any posting yet.
-        # We check *after* the pop-loop so a re-indexed URL isn't double-counted.
-        seen_urls_before = {
-            u for postings in self._index.values() for u in postings
-        }
-        if url not in seen_urls_before:
+        if is_new_document:
             self._doc_count += 1
 
         for position, token in enumerate(tokens):
