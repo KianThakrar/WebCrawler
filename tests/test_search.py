@@ -185,3 +185,33 @@ class TestEdgeCases:
     def test_whitespace_only_term_treated_as_empty(self) -> None:
         engine = _build()
         assert engine.find([""]) == []
+
+
+# ---------------------------------------------------------------------------
+# Punctuation tolerance
+# ---------------------------------------------------------------------------
+
+class TestPunctuationTolerance:
+    def test_find_strips_trailing_comma(self) -> None:
+        engine = _build()
+        plain = engine.find(["wisdom"])
+        with_comma = engine.find(["wisdom,"])
+        assert with_comma == plain
+
+    def test_find_strips_quote_marks(self) -> None:
+        engine = _build()
+        plain = engine.find(["wisdom"])
+        quoted = engine.find(['"wisdom"'])
+        assert quoted == plain
+
+    def test_print_entry_tolerates_punctuation(self) -> None:
+        engine = _build()
+        plain = engine.print_entry("wisdom")
+        with_comma = engine.print_entry("wisdom,")
+        assert with_comma == plain
+
+    def test_bm25_tolerates_punctuation(self) -> None:
+        engine = _build()
+        plain = engine.find_bm25(["wisdom"])
+        with_comma = engine.find_bm25(["wisdom,"])
+        assert with_comma == plain

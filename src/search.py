@@ -48,16 +48,23 @@ class SearchEngine:
         """Return pages containing ALL *terms*, ranked by combined TF-IDF.
 
         The query is case-insensitive and uses AND semantics: only pages
-        that contain every supplied term are returned.
+        that contain every supplied term are returned.  Each input is
+        passed through :func:`tokenise` so punctuation, mixed case, and
+        stopwords are normalised the same way as during indexing — this
+        means ``find(["wisdom,"])`` matches the same documents as
+        ``find(["wisdom"])``.
 
         Args:
-            terms: List of query words (pre-tokenised by the caller).
+            terms: List of query words.  Each entry may itself contain
+                   punctuation or whitespace; it will be normalised.
 
         Returns:
             List of ``(url, score)`` tuples sorted by score descending.
             Empty list if no terms are supplied or no page matches.
         """
-        clean = [t.lower().strip() for t in terms if t.strip()]
+        clean: list[str] = []
+        for raw in terms:
+            clean.extend(tokenise(raw))
         if not clean:
             return []
 
@@ -163,10 +170,12 @@ class SearchEngine:
             Ranked ``(url, score)`` list with proximity bonus applied.
         """
         base_results = self.find(terms)
-        if not base_results or len(terms) < 2:
+        clean: list[str] = []
+        for raw in terms:
+            clean.extend(tokenise(raw))
+        if not base_results or len(clean) < 2:
             return base_results
 
-        clean = [t.lower().strip() for t in terms if t.strip()]
         rescored: list[tuple[str, float]] = []
         for url, base_score in base_results:
             min_dist = self._min_term_distance(url, clean)
@@ -232,7 +241,9 @@ class SearchEngine:
         Returns:
             Ranked ``(url, score)`` list sorted descending.
         """
-        clean = [t.lower().strip() for t in terms if t.strip()]
+        clean: list[str] = []
+        for raw in terms:
+            clean.extend(tokenise(raw))
         if not clean:
             return []
 
@@ -276,15 +287,19 @@ class SearchEngine:
     def print_entry(self, word: str) -> str:
         """Return a formatted string showing the posting list for *word*.
 
+        Input is normalised through :func:`tokenise`, so trailing
+        punctuation, mixed case, and surrounding whitespace are tolerated.
+
         Args:
-            word: Term to look up (case-insensitive).
+            word: Term to look up (case-insensitive, punctuation-tolerant).
 
         Returns:
             Multi-line string with per-URL frequency, positions, and
             TF-IDF score, or a 'not found' message if the word is absent.
         """
-        term = word.lower().strip()
-        if term not in self._index:
+        tokens = tokenise(word)
+        term = tokens[0] if tokens else ""
+        if not term or term not in self._index:
             return f"'{word}' not found in index."
 
         lines: list[str] = [f"{term}:"]
