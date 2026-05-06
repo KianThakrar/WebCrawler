@@ -178,8 +178,11 @@ class SearchEngine:
     def _min_term_distance(self, url: str, terms: list[str]) -> float:
         """Return the minimum position distance between any two query terms.
 
-        Compares the position lists of consecutive term pairs and finds the
-        closest occurrence.  Returns infinity when fewer than two terms are
+        Walks the position lists of each consecutive term pair with a
+        two-pointer merge.  Both lists are sorted ascending, so advancing
+        the pointer at the smaller position is guaranteed never to skip a
+        closer pair — O(P1 + P2) per pair vs O(P1 * P2) for the naive
+        nested loop.  Returns infinity when fewer than two terms are
         present or positions are unavailable.
         """
         min_dist: float = float("inf")
@@ -189,9 +192,17 @@ class SearchEngine:
                 continue
             p1 = self._index[t1].get(url, {}).get("positions", [])
             p2 = self._index[t2].get(url, {}).get("positions", [])
-            for pos1 in p1:
-                for pos2 in p2:
-                    min_dist = min(min_dist, abs(pos1 - pos2))
+            if not p1 or not p2:
+                continue
+            a, b = 0, 0
+            while a < len(p1) and b < len(p2):
+                d = abs(p1[a] - p2[b])
+                if d < min_dist:
+                    min_dist = d
+                if p1[a] < p2[b]:
+                    a += 1
+                else:
+                    b += 1
         return min_dist
 
     def find_bm25(
