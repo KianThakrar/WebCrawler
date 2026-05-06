@@ -26,10 +26,10 @@ src/
   main.py      – Interactive REPL shell
 tests/
   test_crawler.py         – 27 unit tests (all network mocked)
-  test_indexer.py         – 39 unit tests
+  test_indexer.py         – 42 unit tests
   test_search.py          – 22 unit tests
   test_advanced_search.py – 29 tests: phrase, BM25, proximity, suggestions
-  test_cli.py             – 29 tests: command dispatch, REPL loop
+  test_cli.py             – 45 tests: command dispatch, REPL loop
   test_integration.py     – 11 end-to-end pipeline tests
   test_performance.py     – 7 benchmarks with timing assertions
 data/
@@ -122,7 +122,7 @@ Uses **Levenshtein edit distance** with a full DP matrix (O(|a| × |b|)) to find
 | `compute_tfidf` (V terms, D docs/term) | O(V × D) | O(1) in-place |
 | `find` / `find_bm25` (k terms) | O(k × D + D log D) | O(D) |
 | `find_phrase` (k terms, P positions) | O(k × D × P) | O(1) |
-| `find_with_proximity` | O(k × D × P²) | O(D) |
+| `find_with_proximity` | O(k × D × P) | O(D) |
 | `suggest_terms` (V vocab, W word len) | O(V × W²) | O(W²) |
 | `save_index` / `load_index` | O(V × D) | O(V × D) |
 
@@ -232,15 +232,15 @@ pytest tests/test_crawler.py -v
 pytest tests/test_performance.py -v
 ```
 
-**Coverage:** 98% overall (164 tests across 7 test files).
+**Coverage:** 97% overall (183 tests across 7 test files).
 
 | Test file | Tests | What it covers |
 |---|---|---|
 | `test_crawler.py` | 27 | clean_text, parse_quote_page, BFS crawl, politeness, error handling |
-| `test_indexer.py` | 39 | tokenise, InvertedIndex, TF-IDF, build, save/load |
+| `test_indexer.py` | 42 | tokenise, InvertedIndex, TF-IDF, build, save/load |
 | `test_search.py` | 22 | AND query, ranking, print_entry, edge cases |
 | `test_advanced_search.py` | 29 | phrase, proximity, BM25, suggestions, guard branches |
-| `test_cli.py` | 29 | command dispatch, REPL loop, error messages |
+| `test_cli.py` | 45 | command dispatch, REPL loop, error messages |
 | `test_integration.py` | 11 | end-to-end crawl → index → search pipeline |
 | `test_performance.py` | 7 | timing benchmarks for all core operations |
 
