@@ -29,7 +29,7 @@ tests/
   test_indexer.py         – 43 unit tests
   test_search.py          – 26 unit tests
   test_advanced_search.py – 29 tests: phrase, BM25, proximity, suggestions
-  test_cli.py             – 45 tests: command dispatch, REPL loop
+  test_cli.py             – 49 tests: command dispatch, REPL loop
   test_integration.py     – 11 end-to-end pipeline tests
   test_performance.py     – 7 benchmarks with timing assertions
 data/
@@ -112,7 +112,9 @@ score = Σ TF-IDF(term, doc) + 1 / (1 + min_distance)
 
 ### Query Suggestions (Did-You-Mean)
 
-Uses **Levenshtein edit distance** with a full DP matrix (O(|a| × |b|)) to find vocabulary words within 2 edits of the query. Results are sorted by edit distance then alphabetically. Activates automatically when `find` returns no results.
+Uses **Levenshtein edit distance** to find vocabulary words within 2 edits of the query. Results are sorted by edit distance then alphabetically. Activates automatically when `find` returns no results.
+
+The implementation uses **row-at-a-time dynamic programming** with **early-exit pruning**: only two rows of the DP table are kept at any time, and computation aborts as soon as the minimum value in the current row exceeds the maximum allowed distance. This keeps space at `O(min(|a|, |b|))` instead of the textbook `O(|a| × |b|)` and short-circuits long words that can't possibly match within the threshold.
 
 ### Complexity Summary
 
@@ -123,7 +125,7 @@ Uses **Levenshtein edit distance** with a full DP matrix (O(|a| × |b|)) to find
 | `find` / `find_bm25` (k terms) | O(k × D + D log D) | O(D) |
 | `find_phrase` (k terms, P positions) | O(k × D × P) | O(1) |
 | `find_with_proximity` | O(k × D × P) | O(D) |
-| `suggest_terms` (V vocab, W word len) | O(V × W²) | O(W²) |
+| `suggest_terms` (V vocab, W word len) | O(V × W²) worst case | O(W) two-row DP |
 | `save_index` / `load_index` | O(V × D) | O(V × D) |
 
 ### Web Crawler
@@ -152,13 +154,19 @@ python -m src.main
 
 ### Commands
 
-| Command | Description |
-|---|---|
-| `build` | Crawl the website, build the index, save to `data/index.json` |
-| `load` | Load a previously built index from `data/index.json` |
-| `print <word>` | Print the full inverted index entry for a word |
-| `find <word(s)>` | Find pages containing **all** given words, ranked by TF-IDF |
-| `quit` / `exit` | Exit the shell |
+The four commands required by the brief, plus four additional commands that demonstrate advanced features:
+
+| Command | Required by brief? | Description |
+|---|---|---|
+| `build` | yes | Crawl the website, build the index, save to `data/index.json` |
+| `load` | yes | Load a previously built index from `data/index.json` |
+| `print <word>` | yes | Print the full inverted index entry for a word |
+| `find <word(s)>` | yes | Find pages containing **all** given words, ranked by TF-IDF |
+| `phrase <word(s)>` | extension | Exact phrase match using stored token positions |
+| `bm25 <word(s)>` | extension | Same AND query as `find` but ranked by Okapi BM25 |
+| `stats` | extension | Show index size and top terms by document frequency |
+| `help` | extension | List all available commands |
+| `quit` / `exit` | yes | Exit the shell |
 
 ### Example Session
 
@@ -176,20 +184,35 @@ Index loaded from data/index.json (10 page(s), 768 term(s))
 
 > print indifference
 indifference:
-  https://quotes.toscrape.com/page/3/
-    frequency : 1
-    positions : [47]
-    tf_idf    : 0.2310
+  https://quotes.toscrape.com/page/2/
+    frequency : 5
+    positions : [261, 266, 271, 276, 282]
+    tf_idf    : 6.2572
 
 > find good friends
 Results for: good AND friends
-  1. https://quotes.toscrape.com/page/2/  (score: 0.8741)
-  2. https://quotes.toscrape.com/page/7/  (score: 0.3102)
+  1. https://quotes.toscrape.com/page/2/  (score: 6.5217)
+  2. https://quotes.toscrape.com/page/6/  (score: 3.4925)
 
-> find nonsense
-No pages found containing: nonsense
-Did you mean: nonsuch, none?
+> find nonsence
+No pages found containing: nonsence
+Did you mean: nonsense?
+
+> find ,,,
+Query contains no searchable terms after normalisation (punctuation and stopwords are filtered out).
 ```
+
+### Robustness
+
+The CLI distinguishes three "no result" cases so the user always gets a precise message:
+
+| Situation | Response |
+|---|---|
+| Command typed with no arguments (`> find`) | Usage hint listing the expected syntax |
+| Query produces no tokens after normalisation (`> find ,,,`, `> find the and`) | Clear normalisation message naming what was filtered |
+| Query has valid tokens but no matching page (`> find xyznonexistent`) | Not-found message followed by a Levenshtein did-you-mean suggestion |
+
+Search input is run through the same tokeniser as the index, so trailing punctuation (`find wisdom,`) and mixed case (`find GOOD FRIENDS`) match the canonical form.
 
 ---
 
@@ -232,7 +255,7 @@ pytest tests/test_crawler.py -v
 pytest tests/test_performance.py -v
 ```
 
-**Coverage:** 97% overall (188 tests across 7 test files).
+**Coverage:** 97% overall (192 tests across 7 test files).
 
 | Test file | Tests | What it covers |
 |---|---|---|
@@ -240,7 +263,7 @@ pytest tests/test_performance.py -v
 | `test_indexer.py` | 43 | tokenise, InvertedIndex, TF-IDF, build, save/load |
 | `test_search.py` | 26 | AND query, ranking, print_entry, punctuation, edge cases |
 | `test_advanced_search.py` | 29 | phrase, proximity, BM25, suggestions, guard branches |
-| `test_cli.py` | 45 | command dispatch, REPL loop, error messages |
+| `test_cli.py` | 49 | command dispatch, REPL loop, error messages, normalisation |
 | `test_integration.py` | 11 | end-to-end crawl → index → search pipeline |
 | `test_performance.py` | 7 | timing benchmarks for all core operations |
 
