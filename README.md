@@ -26,8 +26,8 @@ src/
   main.py      – Interactive REPL shell
 tests/
   test_crawler.py         – 27 unit tests (all network mocked)
-  test_indexer.py         – 42 unit tests
-  test_search.py          – 22 unit tests
+  test_indexer.py         – 43 unit tests
+  test_search.py          – 26 unit tests
   test_advanced_search.py – 29 tests: phrase, BM25, proximity, suggestions
   test_cli.py             – 45 tests: command dispatch, REPL loop
   test_integration.py     – 11 end-to-end pipeline tests
@@ -168,11 +168,11 @@ Crawling https://quotes.toscrape.com/ …
   [1] https://quotes.toscrape.com/
   [2] https://quotes.toscrape.com/page/2/
   ...
-Index built. 10 page(s), 1842 unique term(s).
+Index built. 10 page(s), 768 unique term(s).
 Index saved to data/index.json
 
 > load
-Index loaded from data/index.json (10 page(s), 1842 term(s))
+Index loaded from data/index.json (10 page(s), 768 term(s))
 
 > print indifference
 indifference:
@@ -232,13 +232,13 @@ pytest tests/test_crawler.py -v
 pytest tests/test_performance.py -v
 ```
 
-**Coverage:** 97% overall (183 tests across 7 test files).
+**Coverage:** 97% overall (188 tests across 7 test files).
 
 | Test file | Tests | What it covers |
 |---|---|---|
 | `test_crawler.py` | 27 | clean_text, parse_quote_page, BFS crawl, politeness, error handling |
-| `test_indexer.py` | 42 | tokenise, InvertedIndex, TF-IDF, build, save/load |
-| `test_search.py` | 22 | AND query, ranking, print_entry, edge cases |
+| `test_indexer.py` | 43 | tokenise, InvertedIndex, TF-IDF, build, save/load |
+| `test_search.py` | 26 | AND query, ranking, print_entry, punctuation, edge cases |
 | `test_advanced_search.py` | 29 | phrase, proximity, BM25, suggestions, guard branches |
 | `test_cli.py` | 45 | command dispatch, REPL loop, error messages |
 | `test_integration.py` | 11 | end-to-end crawl → index → search pipeline |
