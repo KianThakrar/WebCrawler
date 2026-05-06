@@ -13,8 +13,17 @@ import os
 import tempfile
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.indexer import InvertedIndex, build_index
 from src.main import Shell
+
+_JUDGEMENTS_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "tests",
+    "relevance_judgements.json",
+)
+_JUDGEMENTS_AVAILABLE = os.path.exists(_JUDGEMENTS_PATH)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -307,6 +316,10 @@ class TestBm25Command:
 
 
 class TestEvalCommand:
+    @pytest.mark.skipif(
+        not _JUDGEMENTS_AVAILABLE,
+        reason="relevance_judgements.json is a local-only artefact (gitignored)",
+    )
     def test_eval_returns_comparison_table(self) -> None:
         shell = _shell_with_index()
         output = shell.run_command("eval")

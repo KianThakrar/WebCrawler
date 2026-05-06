@@ -51,6 +51,11 @@ EVALUATION.md
 # Local evaluation workspace (raw HTML used to draft relevance judgements)
 .eval_workspace/
 
+# Relevance judgements — kept local for personal review, not part of the
+# repo submission.  The eval feature still ships; the judgements file is
+# loaded at runtime if present.
+tests/relevance_judgements.json
+
 # macOS
 .DS_Store
 .AppleDouble

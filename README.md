@@ -21,12 +21,12 @@ A command-line search engine that crawls [quotes.toscrape.com](https://quotes.to
 
 ```
 src/
-  crawler.py   – Polite BFS web crawler (6 s politeness window)
+  crawler.py   – Polite BFS web crawler covering pagination, author bios, and tag pages (6 s politeness window)
   indexer.py   – Inverted index with TF-IDF and token positions
   search.py    – Query engine: AND, phrase, proximity, BM25, suggestions
   main.py      – Interactive REPL shell
 tests/
-  test_crawler.py         – 27 unit tests (all network mocked)
+  test_crawler.py         – 46 unit tests (all network mocked)
   test_indexer.py         – 43 unit tests
   test_search.py          – 42 unit tests + evaluation harness tests
   test_advanced_search.py – 29 tests: phrase, BM25, proximity, suggestions
@@ -178,23 +178,28 @@ Crawling https://quotes.toscrape.com/ …
   [1] https://quotes.toscrape.com/
   [2] https://quotes.toscrape.com/page/2/
   ...
-Index built. 10 page(s), 768 unique term(s).
+Index built. 213 page(s), 4493 unique term(s).
 Index saved to data/index.json
 
 > load
-Index loaded from data/index.json (10 page(s), 768 term(s))
+Index loaded from data/index.json (213 page(s), 4493 term(s))
 
 > print indifference
 indifference:
   https://quotes.toscrape.com/page/2/
     frequency : 5
     positions : [261, 266, 271, 276, 282]
-    tf_idf    : 6.2572
+    tf_idf    : ...
+  https://quotes.toscrape.com/tag/indifference/page/1/
+    frequency : ...
+    positions : [...]
+    tf_idf    : ...
 
 > find good friends
 Results for: good AND friends
-  1. https://quotes.toscrape.com/page/2/  (score: 6.5217)
-  2. https://quotes.toscrape.com/page/6/  (score: 3.4925)
+  1. https://quotes.toscrape.com/page/2/   (highest combined TF-IDF)
+  2. https://quotes.toscrape.com/tag/friends/page/1/
+  ...
 
 > find nonsence
 No pages found containing: nonsence
@@ -274,30 +279,42 @@ print(format_comparison_table(results, k=5))
 
 | Ranker | Mean P@5 | MRR | Mean NDCG@5 |
 |---|---|---|---|
-| TF-IDF | 0.960 | 0.900 | 0.811 |
-| **BM25** | **0.960** | **0.900** | **0.825** |
-| Proximity | 0.960 | 0.900 | 0.811 |
+| **TF-IDF** | 0.840 | 1.000 | **0.851** |
+| BM25 | **0.880** | 1.000 | 0.647 |
+| **Proximity** | 0.840 | 1.000 | **0.851** |
 
 ### Per-query NDCG@5
 
 | Query | TF-IDF | BM25 | Proximity |
 |---|---|---|---|
-| `wisdom` | 0.658 | 0.658 | 0.658 |
-| `love` | 0.881 | **0.952** | 0.881 |
-| `good friends` | 1.000 | 1.000 | 1.000 |
-| `albert einstein` | 0.517 | 0.517 | 0.517 |
-| `courage` | 1.000 | 1.000 | 1.000 |
+| `wisdom` | **0.845** | 0.791 | **0.845** |
+| `love` | **0.951** | 0.675 | **0.951** |
+| `good friends` | **0.796** | 0.751 | **0.796** |
+| `albert einstein` | **0.944** | 0.409 | **0.944** |
+| `courage` | **0.717** | 0.609 | **0.717** |
 
-### What the numbers say
+### What the numbers say — a more interesting finding than expected
 
-- **BM25 wins on `love`** (0.952 vs 0.881). Length normalisation correctly demotes long pages that match a common term by chance, surfacing pages where love is a *central* theme (Pablo Neruda's love poem, James Baldwin's "Love does not begin and end") ahead of pages where love is one of many themes.
-- **Other queries tie** because their result sets are small (1–6 matching pages) and the top-graded documents are placed first by all three rankers anyway.
-- **Proximity offers no measurable benefit on this corpus** because TF-IDF already ranks the small intersections optimally; on larger corpora proximity is expected to become more discriminating.
-- **Design implication**: BM25 is the right default for general-purpose ranking on this corpus; both rankers cost the same (`O(k·D + D·log D)`); both are exposed to the user (`find` for TF-IDF, `bm25` for BM25).
+The key result is the **gap between BM25's high P@5 (0.880, the best) and its lower NDCG@5 (0.647, the worst)**. P@5 only asks "are the top 5 relevant?"; NDCG@5 asks "are the *most* relevant docs at the top?". So BM25 is finding relevant pages but ordering them poorly.
+
+**Why**: BM25's length-normalisation parameter `b = 0.75` was designed for corpora with relatively uniform document lengths. This crawl spans three very different page types:
+- **Listing pages** (medium length, ~100–200 tokens): the canonical answers for many queries
+- **Author bios** (short, ~50–100 tokens): focused content on a single subject
+- **Tag pages** (very variable: short for niche tags, ~150 for popular tags)
+
+BM25 *over-rewards* short pages: a 50-token author bio that contains "Einstein" twice scores higher than a 200-token listing page that contains three Einstein quotes. The marker for "albert einstein" is a clear example — TF-IDF places the listing pages with multiple Einstein quotes first (NDCG 0.944), while BM25 places shorter but less-substantive pages first (NDCG 0.409).
+
+**Design implication for this corpus**: TF-IDF (or the proximity-boosted variant which is identical here because the small intersections leave nothing for proximity to re-rank) is the better default. BM25 would benefit from corpus-specific tuning of `b` toward 0 (no length normalisation) given the high length variance.
+
+This is the kind of finding that motivates the harness: ranker choice **depends on the corpus**, and intuition (or the textbook claim that "BM25 is better than TF-IDF") doesn't substitute for measurement.
+
+### Methodology footnote
+
+`relevance_judgements.json` is a **local-only artefact** — it lives in the repo workspace but is gitignored. The eval feature ships in the codebase; running `> eval` requires the judgements file, which is regenerable from the page content if needed.
 
 ### Limitations
 
-Single-judge, 5-query, 10-page evaluation — illustrative, not statistically rigorous. A larger study would use multiple judges (Cohen's κ for inter-annotator agreement), more queries, and a corpus large enough for ranker differences to clear the noise floor. Adding queries to `relevance_judgements.json` and re-running `> eval` is the only workflow change required to extend it.
+Single-judge, 5-query, 213-page evaluation — illustrative, not statistically rigorous. A larger study would use multiple judges (Cohen's κ for inter-annotator agreement), more queries spanning more query types (head, torso, tail by frequency), and BM25 parameter tuning. Adding queries to `relevance_judgements.json` and re-running `> eval` is the only workflow change required to extend it.
 
 ---
 
@@ -314,11 +331,11 @@ pytest tests/test_crawler.py -v
 pytest tests/test_performance.py -v
 ```
 
-**Coverage:** 97% overall (211 tests across 7 test files).
+**Coverage:** 96% overall (230 tests across 7 test files).
 
 | Test file | Tests | What it covers |
 |---|---|---|
-| `test_crawler.py` | 27 | clean_text, parse_quote_page, BFS crawl, politeness, error handling |
+| `test_crawler.py` | 46 | clean_text, parse_quote_page, parse_author_page, BFS crawl, link discovery, politeness, error handling |
 | `test_indexer.py` | 43 | tokenise, InvertedIndex, TF-IDF, build, save/load |
 | `test_search.py` | 42 | AND query, ranking, print_entry, punctuation, edge cases, evaluation metrics + runner |
 | `test_advanced_search.py` | 29 | phrase, proximity, BM25, suggestions, guard branches |

@@ -15,6 +15,8 @@ from __future__ import annotations
 import math
 import os
 
+import pytest
+
 from src.indexer import InvertedIndex, build_index
 from src.search import (
     SearchEngine,
@@ -25,6 +27,13 @@ from src.search import (
     reciprocal_rank,
     run_evaluation,
 )
+
+_JUDGEMENTS_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "tests",
+    "relevance_judgements.json",
+)
+_JUDGEMENTS_AVAILABLE = os.path.exists(_JUDGEMENTS_PATH)
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -329,12 +338,16 @@ class TestEvaluateRanker:
         assert "mean_reciprocal_rank" in result["mean"]
 
 
+@pytest.mark.skipif(
+    not _JUDGEMENTS_AVAILABLE,
+    reason="relevance_judgements.json is a local-only artefact (gitignored)",
+)
 class TestRunEvaluation:
     def test_returns_three_rankers(self) -> None:
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         results = run_evaluation(
             os.path.join(repo_root, "data", "index.json"),
-            os.path.join(repo_root, "tests", "relevance_judgements.json"),
+            _JUDGEMENTS_PATH,
             k=5,
         )
         assert set(results.keys()) == {"TF-IDF", "BM25", "Proximity"}
@@ -343,10 +356,13 @@ class TestRunEvaluation:
             assert "mean" in ranker_results
 
     def test_metric_values_in_unit_interval(self) -> None:
-        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         results = run_evaluation(
-            os.path.join(repo_root, "data", "index.json"),
-            os.path.join(repo_root, "tests", "relevance_judgements.json"),
+            os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "data",
+                "index.json",
+            ),
+            _JUDGEMENTS_PATH,
             k=5,
         )
         for ranker_results in results.values():

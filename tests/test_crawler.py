@@ -18,8 +18,10 @@ from src.crawler import (
     MIN_POLITENESS_DELAY_SECONDS,
     clean_text,
     crawl,
+    parse_author_page,
     parse_quote_page,
 )
+from src.crawler import _is_crawlable, _discover_links  # type: ignore  # internal helpers tested directly
 
 
 # ---------------------------------------------------------------------------
@@ -273,3 +275,144 @@ class TestCrawl:
         mock_get.side_effect = Exception("DNS failure")
         pages = crawl(BASE_URL)
         assert pages == []
+
+
+# ---------------------------------------------------------------------------
+# Internal-link filter (_is_crawlable)
+# ---------------------------------------------------------------------------
+
+class TestIsCrawlable:
+    def test_homepage_is_crawlable(self) -> None:
+        assert _is_crawlable("https://quotes.toscrape.com/") is True
+
+    def test_pagination_is_crawlable(self) -> None:
+        assert _is_crawlable("https://quotes.toscrape.com/page/3/") is True
+
+    def test_author_page_is_crawlable(self) -> None:
+        assert _is_crawlable("https://quotes.toscrape.com/author/Albert-Einstein/") is True
+
+    def test_tag_page_is_crawlable(self) -> None:
+        assert _is_crawlable("https://quotes.toscrape.com/tag/wisdom/") is True
+
+    def test_paginated_tag_is_crawlable(self) -> None:
+        assert _is_crawlable("https://quotes.toscrape.com/tag/love/page/2/") is True
+
+    def test_external_host_rejected(self) -> None:
+        assert _is_crawlable("https://en.wikipedia.org/wiki/Albert_Einstein") is False
+
+    def test_login_path_rejected(self) -> None:
+        assert _is_crawlable("https://quotes.toscrape.com/login") is False
+
+    def test_static_asset_rejected(self) -> None:
+        assert _is_crawlable("https://quotes.toscrape.com/static/main.css") is False
+
+
+# ---------------------------------------------------------------------------
+# Author page parser
+# ---------------------------------------------------------------------------
+
+AUTHOR_PAGE_HTML = """
+<html>
+<body>
+  <div class="author-details">
+    <h3 class="author-title">Albert Einstein</h3>
+    <p>
+      <span class="author-born-date">March 14, 1879</span>
+      <span class="author-born-location">in Ulm, Germany</span>
+    </p>
+    <div class="author-description">
+      Albert Einstein was a German-born theoretical physicist who developed
+      the theory of relativity, one of the two pillars of modern physics.
+    </div>
+  </div>
+</body>
+</html>
+"""
+
+
+class TestParseAuthorPage:
+    def test_extracts_name(self) -> None:
+        result = parse_author_page(AUTHOR_PAGE_HTML, "https://quotes.toscrape.com/author/Albert-Einstein/")
+        assert "Albert Einstein" in result["title"]
+
+    def test_content_includes_name_and_bio(self) -> None:
+        result = parse_author_page(AUTHOR_PAGE_HTML, "https://quotes.toscrape.com/author/Albert-Einstein/")
+        content = result["content"]
+        assert "Albert Einstein" in content
+        assert "physicist" in content
+        assert "relativity" in content
+
+    def test_content_includes_birth_metadata(self) -> None:
+        result = parse_author_page(AUTHOR_PAGE_HTML, "https://quotes.toscrape.com/author/Albert-Einstein/")
+        assert "1879" in result["content"]
+        assert "Germany" in result["content"]
+
+    def test_no_discovered_links(self) -> None:
+        result = parse_author_page(AUTHOR_PAGE_HTML, "https://quotes.toscrape.com/author/Albert-Einstein/")
+        assert result["discovered_links"] == []
+
+    def test_no_next_url(self) -> None:
+        result = parse_author_page(AUTHOR_PAGE_HTML, "https://quotes.toscrape.com/author/Albert-Einstein/")
+        assert result["next_url"] is None
+
+    def test_empty_html_returns_empty_content(self) -> None:
+        result = parse_author_page("", "https://quotes.toscrape.com/author/X/")
+        assert result["content"] == ""
+
+    def test_partial_author_page_handles_missing_fields(self) -> None:
+        partial = "<html><body><h3 class='author-title'>Anon</h3></body></html>"
+        result = parse_author_page(partial, "https://quotes.toscrape.com/author/Anon/")
+        assert "Anon" in result["title"]
+
+
+# ---------------------------------------------------------------------------
+# Listing-page link discovery
+# ---------------------------------------------------------------------------
+
+LISTING_WITH_AUTHOR_AND_TAG_LINKS = """
+<html>
+<body>
+  <div class="quote">
+    <span class="text">&#8220;Quote A&#8221;</span>
+    <small class="author">Albert Einstein</small>
+    <a href="/author/Albert-Einstein">(about)</a>
+    <div class="tags">
+      <a class="tag" href="/tag/love/">love</a>
+      <a class="tag" href="/tag/wisdom/">wisdom</a>
+    </div>
+  </div>
+  <nav>
+    <ul class="pager">
+      <li class="next"><a href="/page/2/">Next</a></li>
+    </ul>
+  </nav>
+</body>
+</html>
+"""
+
+
+class TestListingPageLinkDiscovery:
+    def test_discovers_author_links(self) -> None:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(LISTING_WITH_AUTHOR_AND_TAG_LINKS, "html.parser")
+        links = _discover_links(soup, "https://quotes.toscrape.com/")
+        assert any("/author/Albert-Einstein" in u for u in links)
+
+    def test_discovers_tag_links(self) -> None:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(LISTING_WITH_AUTHOR_AND_TAG_LINKS, "html.parser")
+        links = _discover_links(soup, "https://quotes.toscrape.com/")
+        assert any("/tag/love/" in u for u in links)
+        assert any("/tag/wisdom/" in u for u in links)
+
+    def test_discovers_pagination(self) -> None:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(LISTING_WITH_AUTHOR_AND_TAG_LINKS, "html.parser")
+        links = _discover_links(soup, "https://quotes.toscrape.com/")
+        assert any("/page/2/" in u for u in links)
+
+    def test_parse_quote_page_returns_discovered_links(self) -> None:
+        result = parse_quote_page(LISTING_WITH_AUTHOR_AND_TAG_LINKS, "https://quotes.toscrape.com/")
+        assert "discovered_links" in result
+        assert any("/author/" in u for u in result["discovered_links"])
+        assert any("/tag/" in u for u in result["discovered_links"])
