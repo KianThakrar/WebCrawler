@@ -306,6 +306,26 @@ class TestBm25Command:
         assert "no" in output.lower() or "not found" in output.lower()
 
 
+class TestEvalCommand:
+    def test_eval_returns_comparison_table(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("eval")
+        # Output should be the markdown comparison table from format_comparison_table
+        assert "TF-IDF" in output
+        assert "BM25" in output
+        assert "NDCG" in output
+
+    def test_eval_with_missing_index_returns_error(self, tmp_path) -> None:
+        from src.main import Shell
+        shell = Shell(index_path=str(tmp_path / "nonexistent.json"))
+        output = shell.run_command("eval")
+        assert "error" in output.lower() or "cannot" in output.lower()
+
+    def test_help_lists_eval(self) -> None:
+        from src.main import Shell
+        assert "eval" in Shell().run_command("help")
+
+
 class TestUnknownCommands:
     def test_unknown_command_returns_error(self) -> None:
         shell = Shell()

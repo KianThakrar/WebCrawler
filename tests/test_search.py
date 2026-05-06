@@ -12,8 +12,19 @@ We cover:
 
 from __future__ import annotations
 
+import math
+import os
+
 from src.indexer import InvertedIndex, build_index
-from src.search import SearchEngine
+from src.search import (
+    SearchEngine,
+    evaluate_ranker,
+    format_comparison_table,
+    ndcg_at_k,
+    precision_at_k,
+    reciprocal_rank,
+    run_evaluation,
+)
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -215,3 +226,147 @@ class TestPunctuationTolerance:
         plain = engine.find_bm25(["wisdom"])
         with_comma = engine.find_bm25(["wisdom,"])
         assert with_comma == plain
+
+
+# ---------------------------------------------------------------------------
+# Evaluation harness — metrics
+# ---------------------------------------------------------------------------
+
+class TestPrecisionAtK:
+    def test_all_relevant_returns_one(self) -> None:
+        ranked = ["a", "b", "c"]
+        judgements = {"a": 2, "b": 2, "c": 2}
+        assert precision_at_k(ranked, judgements, k=3) == 1.0
+
+    def test_partial_relevant(self) -> None:
+        ranked = ["a", "b", "c"]
+        judgements = {"a": 2, "b": 0, "c": 1}
+        assert precision_at_k(ranked, judgements, k=3) == 2 / 3
+
+    def test_empty_ranked_returns_zero(self) -> None:
+        assert precision_at_k([], {"a": 2}, k=3) == 0.0
+
+    def test_unjudged_treated_as_irrelevant(self) -> None:
+        ranked = ["unknown", "a"]
+        judgements = {"a": 2}
+        assert precision_at_k(ranked, judgements, k=2) == 0.5
+
+    def test_threshold_applied(self) -> None:
+        ranked = ["a", "b"]
+        judgements = {"a": 1, "b": 2}
+        # At threshold=2, only b counts as relevant
+        assert precision_at_k(ranked, judgements, k=2, threshold=2) == 0.5
+
+
+class TestReciprocalRank:
+    def test_first_position_is_one(self) -> None:
+        ranked = ["a", "b", "c"]
+        judgements = {"a": 2}
+        assert reciprocal_rank(ranked, judgements) == 1.0
+
+    def test_third_position(self) -> None:
+        ranked = ["a", "b", "c"]
+        judgements = {"c": 1}
+        assert reciprocal_rank(ranked, judgements) == 1 / 3
+
+    def test_no_relevant_returns_zero(self) -> None:
+        ranked = ["a", "b", "c"]
+        judgements = {"a": 0, "b": 0}
+        assert reciprocal_rank(ranked, judgements) == 0.0
+
+
+class TestNdcgAtK:
+    def test_perfect_ordering_returns_one(self) -> None:
+        ranked = ["a", "b", "c"]
+        judgements = {"a": 2, "b": 1, "c": 0}
+        assert ndcg_at_k(ranked, judgements, k=3) == 1.0
+
+    def test_reversed_ordering_below_one(self) -> None:
+        ranked = ["c", "b", "a"]
+        judgements = {"a": 2, "b": 1, "c": 0}
+        result = ndcg_at_k(ranked, judgements, k=3)
+        # DCG = 0/log2(2) + 1/log2(3) + 2/log2(4)
+        # IDCG = 2/log2(2) + 1/log2(3) + 0/log2(4)
+        expected = (1 / math.log2(3) + 2 / math.log2(4)) / (
+            2 / math.log2(2) + 1 / math.log2(3)
+        )
+        assert abs(result - expected) < 1e-9
+
+    def test_no_relevant_returns_zero(self) -> None:
+        ranked = ["a", "b"]
+        judgements = {"a": 0, "b": 0}
+        assert ndcg_at_k(ranked, judgements, k=2) == 0.0
+
+    def test_ndcg_in_unit_interval(self) -> None:
+        ranked = ["a", "b", "c"]
+        judgements = {"a": 1, "b": 2, "c": 3}
+        result = ndcg_at_k(ranked, judgements, k=3)
+        assert 0.0 <= result <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# Evaluation harness — runner
+# ---------------------------------------------------------------------------
+
+class TestEvaluateRanker:
+    def test_returns_per_query_and_mean(self) -> None:
+        # Build a tiny synthetic judgements dict and a fake ranker
+        judgements_data = {
+            "queries": {
+                "q1": {"judgements": {"a": 2, "b": 0}},
+                "q2": {"judgements": {"x": 1, "y": 1}},
+            }
+        }
+
+        def fake_ranker(_q: str) -> list[tuple[str, float]]:
+            return [("a", 1.0), ("x", 0.5)]
+
+        result = evaluate_ranker(fake_ranker, judgements_data, k=2)
+        assert "per_query" in result
+        assert set(result["per_query"].keys()) == {"q1", "q2"}
+        assert "mean_ndcg_at_k" in result["mean"]
+        assert "mean_precision_at_k" in result["mean"]
+        assert "mean_reciprocal_rank" in result["mean"]
+
+
+class TestRunEvaluation:
+    def test_returns_three_rankers(self) -> None:
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        results = run_evaluation(
+            os.path.join(repo_root, "data", "index.json"),
+            os.path.join(repo_root, "tests", "relevance_judgements.json"),
+            k=5,
+        )
+        assert set(results.keys()) == {"TF-IDF", "BM25", "Proximity"}
+        for ranker_results in results.values():
+            assert "per_query" in ranker_results
+            assert "mean" in ranker_results
+
+    def test_metric_values_in_unit_interval(self) -> None:
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        results = run_evaluation(
+            os.path.join(repo_root, "data", "index.json"),
+            os.path.join(repo_root, "tests", "relevance_judgements.json"),
+            k=5,
+        )
+        for ranker_results in results.values():
+            for metric_name, value in ranker_results["mean"].items():
+                assert 0.0 <= value <= 1.0, f"{metric_name} out of range: {value}"
+
+
+class TestFormatComparisonTable:
+    def test_includes_all_ranker_names(self) -> None:
+        results = {
+            "TF-IDF": {
+                "per_query": {"q1": {"precision_at_k": 1.0, "reciprocal_rank": 1.0, "ndcg_at_k": 1.0}},
+                "mean": {"mean_precision_at_k": 1.0, "mean_reciprocal_rank": 1.0, "mean_ndcg_at_k": 1.0},
+            },
+            "BM25": {
+                "per_query": {"q1": {"precision_at_k": 0.5, "reciprocal_rank": 0.5, "ndcg_at_k": 0.5}},
+                "mean": {"mean_precision_at_k": 0.5, "mean_reciprocal_rank": 0.5, "mean_ndcg_at_k": 0.5},
+            },
+        }
+        table = format_comparison_table(results, k=5)
+        assert "TF-IDF" in table
+        assert "BM25" in table
+        assert "q1" in table

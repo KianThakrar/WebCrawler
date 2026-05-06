@@ -12,6 +12,16 @@ SearchEngine wraps an InvertedIndex and exposes:
 The module also exports:
   suggest_terms(index, word) – Levenshtein-based did-you-mean suggestions
 
+Empirical evaluation
+--------------------
+The module additionally exposes an evaluation harness used to make the
+TF-IDF / BM25 / proximity design decision empirically rather than by
+intuition.  See EVALUATION.md for methodology and results.
+
+  precision_at_k, reciprocal_rank, ndcg_at_k  — IR metrics
+  evaluate_ranker, run_evaluation             — per-ranker drivers
+  format_comparison_table                     — Markdown output helper
+
 Complexity
 ----------
 - find (k terms):           O(k * D + D log D)  intersection + sort
@@ -22,12 +32,23 @@ Complexity
 
 from __future__ import annotations
 
-__all__ = ["SearchEngine", "suggest_terms"]
+__all__ = [
+    "SearchEngine",
+    "suggest_terms",
+    "precision_at_k",
+    "reciprocal_rank",
+    "ndcg_at_k",
+    "evaluate_ranker",
+    "run_evaluation",
+    "format_comparison_table",
+]
 
 import bisect
+import json
 import math
+from typing import Callable, Iterable
 
-from src.indexer import InvertedIndex, tokenise
+from src.indexer import InvertedIndex, load_index, tokenise
 
 
 class SearchEngine:
@@ -93,7 +114,9 @@ class SearchEngine:
             )
             scored.append((url, score))
 
-        return sorted(scored, key=lambda x: x[1], reverse=True)
+        # Tie-break on URL so ordering is deterministic across runs
+        # (Python sets have non-deterministic iteration order).
+        return sorted(scored, key=lambda x: (-x[1], x[0]))
 
     def find_phrase(self, phrase: str) -> list[tuple[str, float]]:
         """Return pages where *phrase* appears as consecutive tokens.
@@ -182,7 +205,7 @@ class SearchEngine:
             bonus = 1.0 / (1.0 + min_dist)
             rescored.append((url, base_score + bonus))
 
-        return sorted(rescored, key=lambda x: x[1], reverse=True)
+        return sorted(rescored, key=lambda x: (-x[1], x[0]))
 
     def _min_term_distance(self, url: str, terms: list[str]) -> float:
         """Return the minimum position distance between any two query terms.
@@ -282,7 +305,7 @@ class SearchEngine:
                 total += idf * tf_n
             scored.append((url, total))
 
-        return sorted(scored, key=lambda x: x[1], reverse=True)
+        return sorted(scored, key=lambda x: (-x[1], x[0]))
 
     def print_entry(self, word: str) -> str:
         """Return a formatted string showing the posting list for *word*.
@@ -388,3 +411,215 @@ def suggest_terms(
 
     candidates.sort(key=lambda x: (x[0], x[1]))
     return [t for _, t in candidates[:max_results]]
+
+
+# ===========================================================================
+# Empirical evaluation harness
+# ===========================================================================
+#
+# These functions let us measure the ranking quality of TF-IDF, BM25, and
+# proximity-boosted scoring against hand-judged relevance labels.  This
+# is what motivated the BM25 design choice — see EVALUATION.md.
+
+# A ranker takes a query string and returns a ranked (url, score) list.
+Ranker = Callable[[str], list[tuple[str, float]]]
+
+
+def precision_at_k(
+    ranked_urls: list[str],
+    judgements: dict[str, int],
+    k: int,
+    threshold: int = 1,
+) -> float:
+    """Fraction of the top-*k* ranked URLs that are relevant.
+
+    A URL is considered relevant if its judged grade is at least
+    *threshold*.  Unjudged URLs default to grade 0 (not relevant), the
+    standard TREC pooling assumption.
+
+    Args:
+        ranked_urls: URLs in rank order (best first).
+        judgements:  ``url -> graded relevance`` mapping.
+        k:           Cut-off rank.
+        threshold:   Minimum grade to count as relevant (default 1).
+
+    Returns:
+        Precision in [0.0, 1.0].
+    """
+    top_k = ranked_urls[:k]
+    if not top_k:
+        return 0.0
+    relevant = sum(1 for url in top_k if judgements.get(url, 0) >= threshold)
+    return relevant / len(top_k)
+
+
+def reciprocal_rank(
+    ranked_urls: list[str],
+    judgements: dict[str, int],
+    threshold: int = 1,
+) -> float:
+    """Reciprocal of the rank of the first relevant URL; 0 if none."""
+    for i, url in enumerate(ranked_urls, start=1):
+        if judgements.get(url, 0) >= threshold:
+            return 1.0 / i
+    return 0.0
+
+
+def ndcg_at_k(
+    ranked_urls: list[str],
+    judgements: dict[str, int],
+    k: int,
+) -> float:
+    """Normalised Discounted Cumulative Gain at rank *k*.
+
+    Uses the linear-gain formulation::
+
+        DCG@k  = sum_{i=1..k}  rel_i / log2(i + 1)
+        IDCG@k = DCG@k computed on the optimal ranking
+        NDCG   = DCG / IDCG     (or 0 if no relevant docs exist)
+
+    Returns:
+        NDCG in [0.0, 1.0].  Returns 0 when no judged document is
+        relevant (IDCG = 0), the standard TREC convention.
+    """
+    top_k = ranked_urls[:k]
+    dcg = sum(
+        judgements.get(url, 0) / math.log2(i + 1)
+        for i, url in enumerate(top_k, start=1)
+    )
+
+    ideal_grades = sorted(judgements.values(), reverse=True)[:k]
+    idcg = sum(grade / math.log2(i + 1) for i, grade in enumerate(ideal_grades, start=1))
+
+    if idcg == 0:
+        return 0.0
+    return dcg / idcg
+
+
+def evaluate_ranker(
+    ranker: Ranker,
+    judgements_data: dict,
+    k: int = 5,
+) -> dict[str, dict]:
+    """Run *ranker* against every query in *judgements_data*.
+
+    Args:
+        ranker:          Callable taking a query string and returning a
+                         ranked list of ``(url, score)`` tuples.
+        judgements_data: Parsed contents of relevance_judgements.json.
+        k:               Cut-off used for Precision@k and NDCG@k.
+
+    Returns:
+        ``{"per_query": {...}, "mean": {...}}`` with metric values.
+    """
+    per_query: dict[str, dict[str, float]] = {}
+    queries: Iterable[str] = judgements_data["queries"].keys()
+
+    for query in queries:
+        q_data = judgements_data["queries"][query]
+        ranked_urls = [url for url, _ in ranker(query)]
+        judgements = q_data["judgements"]
+        per_query[query] = {
+            "precision_at_k": precision_at_k(ranked_urls, judgements, k),
+            "reciprocal_rank": reciprocal_rank(ranked_urls, judgements),
+            "ndcg_at_k": ndcg_at_k(ranked_urls, judgements, k),
+        }
+
+    n = len(per_query)
+    if n == 0:
+        mean = {
+            "mean_precision_at_k": 0.0,
+            "mean_reciprocal_rank": 0.0,
+            "mean_ndcg_at_k": 0.0,
+        }
+    else:
+        mean = {
+            f"mean_{metric}": sum(per_query[q][metric] for q in per_query) / n
+            for metric in ("precision_at_k", "reciprocal_rank", "ndcg_at_k")
+        }
+
+    return {"per_query": per_query, "mean": mean}
+
+
+def _build_default_rankers(engine: SearchEngine) -> dict[str, Ranker]:
+    """Return the three rankers we evaluate.
+
+    Each ranker takes a raw query string (which may contain multiple
+    space-separated words) and returns a ranked ``(url, score)`` list.
+    The query is wrapped in a single-element list so the SearchEngine's
+    own tokeniser handles whitespace, punctuation, and stopword filtering.
+    """
+    return {
+        "TF-IDF": lambda q: engine.find([q]),
+        "BM25": lambda q: engine.find_bm25([q]),
+        "Proximity": lambda q: engine.find_with_proximity([q]),
+    }
+
+
+def run_evaluation(
+    index_path: str,
+    judgements_path: str,
+    k: int = 5,
+) -> dict[str, dict]:
+    """Load index and judgements, run every ranker, return all results.
+
+    Args:
+        index_path:      Path to a previously built ``data/index.json``.
+        judgements_path: Path to ``relevance_judgements.json``.
+        k:               Cut-off for Precision@k and NDCG@k.
+
+    Returns:
+        ``{ranker_name: evaluate_ranker(...)}`` for every ranker.
+    """
+    with open(judgements_path, encoding="utf-8") as fh:
+        judgements_data = json.load(fh)
+
+    idx = load_index(index_path)
+    engine = SearchEngine(idx)
+    rankers = _build_default_rankers(engine)
+
+    return {name: evaluate_ranker(fn, judgements_data, k) for name, fn in rankers.items()}
+
+
+def format_comparison_table(results: dict[str, dict], k: int = 5) -> str:
+    """Render a Markdown comparison table summarising the evaluation.
+
+    Args:
+        results: Output of :func:`run_evaluation`.
+        k:       Same cut-off used during evaluation (for headers).
+
+    Returns:
+        Markdown string showing mean metrics per ranker plus per-query
+        NDCG@k for direct comparison.
+    """
+    ranker_names = list(results.keys())
+    queries = list(next(iter(results.values()))["per_query"].keys())
+
+    lines: list[str] = []
+    lines.append(f"## Mean metrics across {len(queries)} queries (k={k})")
+    lines.append("")
+    lines.append("| Ranker | Mean P@k | MRR | Mean NDCG@k |")
+    lines.append("|---|---|---|---|")
+    for name in ranker_names:
+        m = results[name]["mean"]
+        lines.append(
+            f"| {name} | "
+            f"{m['mean_precision_at_k']:.3f} | "
+            f"{m['mean_reciprocal_rank']:.3f} | "
+            f"{m['mean_ndcg_at_k']:.3f} |"
+        )
+    lines.append("")
+
+    lines.append(f"## Per-query NDCG@{k}")
+    lines.append("")
+    header = "| Query | " + " | ".join(ranker_names) + " |"
+    sep = "|---" * (len(ranker_names) + 1) + "|"
+    lines.append(header)
+    lines.append(sep)
+    for q in queries:
+        cells = [f"`{q}`"]
+        for name in ranker_names:
+            cells.append(f"{results[name]['per_query'][q]['ndcg_at_k']:.3f}")
+        lines.append("| " + " | ".join(cells) + " |")
+
+    return "\n".join(lines)

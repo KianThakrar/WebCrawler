@@ -11,8 +11,9 @@ A command-line search engine that crawls [quotes.toscrape.com](https://quotes.to
 3. [Installation](#installation)
 4. [Usage](#usage)
 5. [Advanced Commands](#advanced-commands)
-6. [Testing](#testing)
-7. [Dependencies](#dependencies)
+6. [Empirical Evaluation](#empirical-evaluation)
+7. [Testing](#testing)
+8. [Dependencies](#dependencies)
 
 ---
 
@@ -27,9 +28,9 @@ src/
 tests/
   test_crawler.py         – 27 unit tests (all network mocked)
   test_indexer.py         – 43 unit tests
-  test_search.py          – 26 unit tests
+  test_search.py          – 42 unit tests + evaluation harness tests
   test_advanced_search.py – 29 tests: phrase, BM25, proximity, suggestions
-  test_cli.py             – 49 tests: command dispatch, REPL loop
+  test_cli.py             – 52 tests: command dispatch, REPL loop
   test_integration.py     – 11 end-to-end pipeline tests
   test_performance.py     – 7 benchmarks with timing assertions
 data/
@@ -165,6 +166,7 @@ The four commands required by the brief, plus four additional commands that demo
 | `phrase <word(s)>` | extension | Exact phrase match using stored token positions |
 | `bm25 <word(s)>` | extension | Same AND query as `find` but ranked by Okapi BM25 |
 | `stats` | extension | Show index size and top terms by document frequency |
+| `eval` | extension | Run the empirical evaluation harness against hand-judged queries; outputs a Markdown comparison table for TF-IDF, BM25, and proximity (see [Empirical Evaluation](#empirical-evaluation)) |
 | `help` | extension | List all available commands |
 | `quit` / `exit` | yes | Exit the shell |
 
@@ -242,6 +244,63 @@ suggest_terms(idx, "frends", max_results=3)
 
 ---
 
+## Empirical Evaluation
+
+Ranker choice is usually justified by intuition or textbook precedent. For a corpus small enough to hand-label every document, the better answer is to **measure**. The system ships with an evaluation harness comparing TF-IDF, BM25, and proximity-boosted ranking against hand-judged relevance.
+
+### Methodology
+
+- **5 queries** chosen to exercise different ranker behaviours: `wisdom` (sparse single term), `love` (very common, exposes BM25 length normalisation), `good friends` (multi-word with canonical phrase match), `albert einstein` (proper-noun multi-word), `courage` (sparse term with two pages).
+- **Graded relevance judgements** (0–3 scale) for every page × query in [`tests/relevance_judgements.json`](tests/relevance_judgements.json), each with a `rationale` and per-query `notes` justifying the grades.
+- **Three IR metrics** at cut-off `k = 5`: Precision@k, Mean Reciprocal Rank (MRR), and NDCG@k (linear-gain formulation). Implementations + unit tests in [`src/search.py`](src/search.py) and [`tests/test_search.py`](tests/test_search.py).
+- **Reproducibility**: ranked results break ties on URL (alphabetical) so the same query produces byte-identical output between runs.
+
+### Run it
+
+From the REPL:
+```
+> load
+> eval
+```
+
+Or programmatically:
+```python
+from src.search import run_evaluation, format_comparison_table
+results = run_evaluation("data/index.json", "tests/relevance_judgements.json", k=5)
+print(format_comparison_table(results, k=5))
+```
+
+### Results — mean across 5 queries (k=5)
+
+| Ranker | Mean P@5 | MRR | Mean NDCG@5 |
+|---|---|---|---|
+| TF-IDF | 0.960 | 0.900 | 0.811 |
+| **BM25** | **0.960** | **0.900** | **0.825** |
+| Proximity | 0.960 | 0.900 | 0.811 |
+
+### Per-query NDCG@5
+
+| Query | TF-IDF | BM25 | Proximity |
+|---|---|---|---|
+| `wisdom` | 0.658 | 0.658 | 0.658 |
+| `love` | 0.881 | **0.952** | 0.881 |
+| `good friends` | 1.000 | 1.000 | 1.000 |
+| `albert einstein` | 0.517 | 0.517 | 0.517 |
+| `courage` | 1.000 | 1.000 | 1.000 |
+
+### What the numbers say
+
+- **BM25 wins on `love`** (0.952 vs 0.881). Length normalisation correctly demotes long pages that match a common term by chance, surfacing pages where love is a *central* theme (Pablo Neruda's love poem, James Baldwin's "Love does not begin and end") ahead of pages where love is one of many themes.
+- **Other queries tie** because their result sets are small (1–6 matching pages) and the top-graded documents are placed first by all three rankers anyway.
+- **Proximity offers no measurable benefit on this corpus** because TF-IDF already ranks the small intersections optimally; on larger corpora proximity is expected to become more discriminating.
+- **Design implication**: BM25 is the right default for general-purpose ranking on this corpus; both rankers cost the same (`O(k·D + D·log D)`); both are exposed to the user (`find` for TF-IDF, `bm25` for BM25).
+
+### Limitations
+
+Single-judge, 5-query, 10-page evaluation — illustrative, not statistically rigorous. A larger study would use multiple judges (Cohen's κ for inter-annotator agreement), more queries, and a corpus large enough for ranker differences to clear the noise floor. Adding queries to `relevance_judgements.json` and re-running `> eval` is the only workflow change required to extend it.
+
+---
+
 ## Testing
 
 ```bash
@@ -255,15 +314,15 @@ pytest tests/test_crawler.py -v
 pytest tests/test_performance.py -v
 ```
 
-**Coverage:** 97% overall (192 tests across 7 test files).
+**Coverage:** 96% overall (211 tests across 7 test files).
 
 | Test file | Tests | What it covers |
 |---|---|---|
 | `test_crawler.py` | 27 | clean_text, parse_quote_page, BFS crawl, politeness, error handling |
 | `test_indexer.py` | 43 | tokenise, InvertedIndex, TF-IDF, build, save/load |
-| `test_search.py` | 26 | AND query, ranking, print_entry, punctuation, edge cases |
+| `test_search.py` | 42 | AND query, ranking, print_entry, punctuation, edge cases, evaluation metrics + runner |
 | `test_advanced_search.py` | 29 | phrase, proximity, BM25, suggestions, guard branches |
-| `test_cli.py` | 49 | command dispatch, REPL loop, error messages, normalisation |
+| `test_cli.py` | 52 | command dispatch, REPL loop, error messages, normalisation, eval command |
 | `test_integration.py` | 11 | end-to-end crawl → index → search pipeline |
 | `test_performance.py` | 7 | timing benchmarks for all core operations |
 

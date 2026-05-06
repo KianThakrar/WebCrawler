@@ -1,0 +1,96 @@
+{
+  "version": 2,
+  "review_status": "AI-drafted from page content; pending human review and confirmation by Kian Thakrar before final submission",
+  "scale": {
+    "0": "Not relevant — page has no meaningful content match for the query",
+    "1": "Marginally relevant — the term appears but the page's quotes are not really about the topic",
+    "2": "Relevant — clear thematic match; one substantive on-topic quote",
+    "3": "Highly relevant — canonical or anchor content for the topic; multiple substantive matches or a particularly philosophically rich quote"
+  },
+  "corpus": {
+    "pages": 10,
+    "url_template": "https://quotes.toscrape.com/page/{n}/"
+  },
+  "queries": {
+    "wisdom": {
+      "rationale": "Sparse single term; only one page contains it (in a tag). Tests whether rankers correctly surface the rare matching document.",
+      "judgements": {
+        "https://quotes.toscrape.com/page/1/": 1,
+        "https://quotes.toscrape.com/page/2/": 1,
+        "https://quotes.toscrape.com/page/3/": 1,
+        "https://quotes.toscrape.com/page/4/": 3,
+        "https://quotes.toscrape.com/page/5/": 0,
+        "https://quotes.toscrape.com/page/6/": 0,
+        "https://quotes.toscrape.com/page/7/": 0,
+        "https://quotes.toscrape.com/page/8/": 0,
+        "https://quotes.toscrape.com/page/9/": 0,
+        "https://quotes.toscrape.com/page/10/": 0
+      },
+      "notes": "Page 4 is the only page where 'wisdom' appears literally (Einstein quote tagged 'wisdom'). Pages 1-3 contain Einstein quotes about understanding/imagination/miracles which are wisdom-adjacent themes."
+    },
+    "love": {
+      "rationale": "Very common term (every page). Tests whether BM25's length normalisation correctly elevates pages with substantive love content over pages where love is incidental, and whether TF-IDF over-weights long pages that match by chance.",
+      "judgements": {
+        "https://quotes.toscrape.com/page/1/": 1,
+        "https://quotes.toscrape.com/page/2/": 2,
+        "https://quotes.toscrape.com/page/3/": 3,
+        "https://quotes.toscrape.com/page/4/": 1,
+        "https://quotes.toscrape.com/page/5/": 3,
+        "https://quotes.toscrape.com/page/6/": 2,
+        "https://quotes.toscrape.com/page/7/": 3,
+        "https://quotes.toscrape.com/page/8/": 1,
+        "https://quotes.toscrape.com/page/9/": 1,
+        "https://quotes.toscrape.com/page/10/": 1
+      },
+      "notes": "Grade 3 pages have a canonical love quote: p3 (Pablo Neruda love poem), p5 (James Baldwin 'Love does not begin and end'), p7 (C.S. Lewis 'To love at all is to be vulnerable'). Grade 2 pages have substantive but non-canonical love content (p2 multiple love quotes, p6 Austen + Hemingway). Grade 1 pages mention love only in a tag or in passing."
+    },
+    "good friends": {
+      "rationale": "Multi-word query with a canonical exact-phrase match. Tests AND intersection (both terms must match) and whether proximity scoring boosts the page where the words appear together over the page where they appear in unrelated quotes.",
+      "judgements": {
+        "https://quotes.toscrape.com/page/1/": 0,
+        "https://quotes.toscrape.com/page/2/": 3,
+        "https://quotes.toscrape.com/page/3/": 0,
+        "https://quotes.toscrape.com/page/4/": 0,
+        "https://quotes.toscrape.com/page/5/": 0,
+        "https://quotes.toscrape.com/page/6/": 1,
+        "https://quotes.toscrape.com/page/7/": 0,
+        "https://quotes.toscrape.com/page/8/": 0,
+        "https://quotes.toscrape.com/page/9/": 0,
+        "https://quotes.toscrape.com/page/10/": 0
+      },
+      "notes": "Page 2 contains the exact Mark Twain phrase 'Good friends, good books, and a sleepy conscience' — canonical match (grade 3). Page 6 has both terms but in unrelated quotes (Austen on friends, Marilyn Monroe 'I am good but not an angel') — only weakly relevant (grade 1). Only p2 and p6 contain both terms; AND search returns only these two."
+    },
+    "albert einstein": {
+      "rationale": "Proper-noun multi-word query. Tests whether proximity scoring elevates pages where the name parts appear adjacently (the actual author byline) over pages where they appear far apart.",
+      "judgements": {
+        "https://quotes.toscrape.com/page/1/": 3,
+        "https://quotes.toscrape.com/page/2/": 1,
+        "https://quotes.toscrape.com/page/3/": 3,
+        "https://quotes.toscrape.com/page/4/": 1,
+        "https://quotes.toscrape.com/page/5/": 1,
+        "https://quotes.toscrape.com/page/6/": 1,
+        "https://quotes.toscrape.com/page/7/": 0,
+        "https://quotes.toscrape.com/page/8/": 0,
+        "https://quotes.toscrape.com/page/9/": 1,
+        "https://quotes.toscrape.com/page/10/": 0
+      },
+      "notes": "Pages 1 and 3 have three Einstein quotes each (highest density, grade 3). Other matching pages have one Einstein quote (grade 1). Pages 7, 8, 10 have no Einstein content."
+    },
+    "courage": {
+      "rationale": "Sparse term appearing on two pages with very different framings. Tests whether the ranker surfaces the page with the literal word in the quote text (Cummings) ahead of the page where 'courage' is only a tag for a quote about bravery (Rowling).",
+      "judgements": {
+        "https://quotes.toscrape.com/page/1/": 0,
+        "https://quotes.toscrape.com/page/2/": 2,
+        "https://quotes.toscrape.com/page/3/": 0,
+        "https://quotes.toscrape.com/page/4/": 0,
+        "https://quotes.toscrape.com/page/5/": 0,
+        "https://quotes.toscrape.com/page/6/": 0,
+        "https://quotes.toscrape.com/page/7/": 0,
+        "https://quotes.toscrape.com/page/8/": 0,
+        "https://quotes.toscrape.com/page/9/": 0,
+        "https://quotes.toscrape.com/page/10/": 3
+      },
+      "notes": "Page 10 has 'It takes courage to grow up' (E.E. Cummings) — literal word in the quote text, courage is the central theme (grade 3). Page 2 has Rowling's bravery-themed quote with 'courage' as a tag — topically about courage but the quote uses 'bravery' (grade 2)."
+    }
+  }
+}

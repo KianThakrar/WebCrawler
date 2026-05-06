@@ -46,6 +46,10 @@ junit*.xml
 
 # Personal notes
 VIDEO_SCRIPT.md
+EVALUATION.md
+
+# Local evaluation workspace (raw HTML used to draft relevance judgements)
+.eval_workspace/
 
 # macOS
 .DS_Store

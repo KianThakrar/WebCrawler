@@ -15,10 +15,20 @@ import os
 
 from src.crawler import crawl
 from src.indexer import InvertedIndex, build_index, load_index, save_index, tokenise
-from src.search import SearchEngine, suggest_terms
+from src.search import (
+    SearchEngine,
+    format_comparison_table,
+    run_evaluation,
+    suggest_terms,
+)
 
 _DEFAULT_INDEX_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "data", "index.json"
+)
+_DEFAULT_JUDGEMENTS_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)),
+    "tests",
+    "relevance_judgements.json",
 )
 
 _EMPTY_QUERY_MSG = (
@@ -81,6 +91,7 @@ class Shell:
             "phrase": self._cmd_phrase,
             "bm25": self._cmd_bm25,
             "stats": self._cmd_stats,
+            "eval": self._cmd_eval,
             "help": self._cmd_help,
             "quit": self._cmd_quit,
             "exit": self._cmd_quit,
@@ -214,6 +225,15 @@ class Shell:
         ]
         return "\n".join(lines)
 
+    def _cmd_eval(self, _args: list[str]) -> str:
+        try:
+            results = run_evaluation(
+                self._index_path, _DEFAULT_JUDGEMENTS_PATH, k=5
+            )
+        except FileNotFoundError as exc:
+            return f"Error: cannot run evaluation – {exc}"
+        return format_comparison_table(results, k=5)
+
     def _cmd_help(self, _args: list[str]) -> str:
         return (
             "Available commands:\n"
@@ -224,6 +244,7 @@ class Shell:
             "  phrase <word(s)>    – exact phrase search\n"
             "  bm25  <word(s)>     – AND search, BM25 ranked\n"
             "  stats               – show index statistics\n"
+            "  eval                – run evaluation harness vs hand-judged queries\n"
             "  quit / exit         – exit the shell"
         )
 
@@ -247,7 +268,7 @@ def main() -> None:
     """Run the interactive CLI shell."""
     shell = Shell()
     print("Search Engine – quotes.toscrape.com")
-    print("Commands: build | load | print | find | phrase | bm25 | stats | help | quit\n")
+    print("Commands: build | load | print | find | phrase | bm25 | stats | eval | help | quit\n")
 
     while True:
         try:
