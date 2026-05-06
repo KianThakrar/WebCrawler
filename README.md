@@ -314,7 +314,7 @@ pytest tests/test_crawler.py -v
 pytest tests/test_performance.py -v
 ```
 
-**Coverage:** 96% overall (211 tests across 7 test files).
+**Coverage:** 97% overall (211 tests across 7 test files).
 
 | Test file | Tests | What it covers |
 |---|---|---|
