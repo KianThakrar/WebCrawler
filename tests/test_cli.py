@@ -229,6 +229,26 @@ class TestFindCommand:
         output = shell.run_command("find wisdom")
         assert "score" in output.lower() or "." in output
 
+    def test_find_punctuation_only_returns_normalisation_message(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("find ,,,")
+        assert "no searchable terms" in output.lower()
+
+    def test_find_stopwords_only_returns_normalisation_message(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("find the and of")
+        assert "no searchable terms" in output.lower()
+
+    def test_phrase_punctuation_only_returns_normalisation_message(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("phrase ,,, !!!")
+        assert "no searchable terms" in output.lower()
+
+    def test_bm25_stopwords_only_returns_normalisation_message(self) -> None:
+        shell = _shell_with_index()
+        output = shell.run_command("bm25 the and")
+        assert "no searchable terms" in output.lower()
+
 
 # ---------------------------------------------------------------------------
 # Unknown / empty commands

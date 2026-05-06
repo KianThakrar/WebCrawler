@@ -14,12 +14,22 @@ from __future__ import annotations
 import os
 
 from src.crawler import crawl
-from src.indexer import InvertedIndex, build_index, load_index, save_index
+from src.indexer import InvertedIndex, build_index, load_index, save_index, tokenise
 from src.search import SearchEngine, suggest_terms
 
 _DEFAULT_INDEX_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "data", "index.json"
 )
+
+_EMPTY_QUERY_MSG = (
+    "Query contains no searchable terms after normalisation "
+    "(punctuation and stopwords are filtered out)."
+)
+
+
+def _has_searchable_terms(args: list[str]) -> bool:
+    """Return True if at least one *arg* yields a token after tokenising."""
+    return any(tokenise(arg) for arg in args)
 
 
 class Shell:
@@ -129,6 +139,8 @@ class Shell:
             return "Usage: find <word> [word ...]"
         if self._engine is None:
             return "No index loaded. Run 'build' or 'load' first."
+        if not _has_searchable_terms(args):
+            return _EMPTY_QUERY_MSG
 
         results = self._engine.find(args)
         if not results:
@@ -153,6 +165,8 @@ class Shell:
             return "Usage: phrase <word> [word ...]"
         if self._engine is None:
             return "No index loaded. Run 'build' or 'load' first."
+        if not _has_searchable_terms(args):
+            return _EMPTY_QUERY_MSG
 
         results = self._engine.find_phrase(" ".join(args))
         if not results:
@@ -168,6 +182,8 @@ class Shell:
             return "Usage: bm25 <word> [word ...]"
         if self._engine is None:
             return "No index loaded. Run 'build' or 'load' first."
+        if not _has_searchable_terms(args):
+            return _EMPTY_QUERY_MSG
 
         results = self._engine.find_bm25(args)
         if not results:
